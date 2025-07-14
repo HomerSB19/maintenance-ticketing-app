@@ -1,75 +1,50 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
+const { createClient } = require('@supabase/supabase-js');
 const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public')); // Serve static files from 'public' folder
+app.use(express.static('public'));
 
-// Initialize SQLite database
-const db = new sqlite3.Database(':memory:', (err) => {
-    if (err) {
-        console.error('Error opening database:', err.message);
-    } else {
-        db.run(`CREATE TABLE IF NOT EXISTS tickets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            description TEXT NOT NULL,
-            priority TEXT NOT NULL,
-            status TEXT NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`);
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_KEY
+);
+
+app.get('/api/tickets', async (req, res) => {
+    const { data, error } = await supabase.from('tickets').select('*');
+    if (error) {
+        console.error('Error fetching tickets:', error);
+        return res.status(500).json({ error: error.message });
     }
+    res.json(data);
 });
 
-// Get all tickets
-app.get('/api/tickets', (req, res) => {
-    db.all('SELECT * FROM tickets', [], (err, rows) => {
-        if (err) {
-            res.status(500).json({ error: err.message });
-            return;
-        }
-        res.json(rows);
-    });
-});
-
-// Create a new ticket
-app.post('/api/tickets', (req, res) => {
+app.post('/api/tickets', async (req, res) => {
     const { title, description, priority, status } = req.body;
-    db.run(
-        'INSERT INTO tickets (title, description, priority, status) VALUES (?, ?, ?, ?)',
-        [title, description, priority, status],
-        function (err) {
-            if (err) {
-                res.status(500).json({ error: err.message });
-                return;
-            }
-            res.status(201).json({ id: this.lastID });
-        }
-    );
+    const { data, error } = await supabase.from('tickets').insert([
+        { title, description, priority, status, created_at: new Date().toISOString() }
+    ]).select();
+    if (error) {
+        console.error('Error inserting ticket:', error);
+        return res.status(500).json({ error: error.message });
+    }
+    res.status(201).json({ id: data[0].id });
 });
 
-// Update ticket status
-app.put('/api/tickets/:id', (req, res) => {
+app.put('/api/tickets/:id', async (req, res) => {
     const { status } = req.body;
     const { id } = req.params;
-    db.run(
-        'UPDATE tickets SET status = ? WHERE id = ?',
-        [status, id],
-        function (err) {
-            if (err) {
-                res.status(500).json({ error: err.message });
-                return;
-            }
-            res.json({ updated: this.changes });
-        }
-    );
+    const { error } = await supabase.from('tickets').update({ status }).eq('id', id);
+    if (error) {
+        console.error('Error updating ticket:', error);
+        return res.status(500).json({ error: error.message });
+    }
+    res.json({ updated: true });
 });
 
-// Start the server
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });
