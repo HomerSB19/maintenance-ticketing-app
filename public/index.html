@@ -1,102 +1,42 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Maintenance Ticketing App</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        h1 {
-            text-align: center;
-        }
-        #ticketForm {
-            margin-bottom: 20px;
-        }
-        #ticketForm input, #ticketForm textarea, #ticketForm select {
-            width: 100%;
-            padding: 8px;
-            margin: 5px 0;
-        }
-        #ticketList {
-            border: 1px solid #ccc;
-            padding: 10px;
-        }
-        .ticket {
-            border-bottom: 1px solid #eee;
-            padding: 10px 0;
-        }
-        .ticket:last-child {
-            border-bottom: none;
-        }
-        button {
-            padding: 8px 16px;
-            margin: 5px;
-        }
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .ticket { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+        form { margin-bottom: 20px; }
+        label { display: block; margin: 5px 0; }
+        input, select, button { margin: 5px; padding: 5px; }
     </style>
 </head>
 <body>
     <h1>Maintenance Ticketing App</h1>
-    <div id="ticketForm">
-        <input type="text" id="title" placeholder="Ticket Title" required>
-        <textarea id="description" placeholder="Description" required></textarea>
-        <select id="priority" required>
+    <form onsubmit="event.preventDefault(); submitTicket();">
+        <label for="title">Title:</label>
+        <input type="text" id="title" required>
+        <label for="description">Description:</label>
+        <textarea id="description" required></textarea>
+        <label for="priority">Priority:</label>
+        <select id="priority">
             <option value="Low">Low</option>
             <option value="Medium">Medium</option>
             <option value="High">High</option>
         </select>
-        <button onclick="submitTicket()">Submit Ticket</button>
-    </div>
+        <button type="submit">Submit Ticket</button>
+    </form>
+    <h2>Tickets</h2>
     <div id="ticketList"></div>
-
     <script>
-        // Fetch and display tickets
         async function loadTickets() {
             try {
                 const response = await fetch('/api/tickets');
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
                 const tickets = await response.json();
                 const ticketList = document.getElementById('ticketList');
                 ticketList.innerHTML = '';
@@ -113,10 +53,10 @@
                 });
             } catch (error) {
                 console.error('Error loading tickets:', error);
+                alert(`Failed to load tickets: ${error.message}`);
             }
         }
 
-        // Submit a new ticket
         async function submitTicket() {
             const title = document.getElementById('title').value;
             const description = document.getElementById('description').value;
@@ -133,20 +73,20 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title, description, priority, status: 'Open' })
                 });
-                if (response.ok) {
-                    document.getElementById('title').value = '';
-                    document.getElementById('description').value = '';
-                    document.getElementById('priority').value = 'Low';
-                    loadTickets();
-                } else {
-                    alert('Error submitting ticket');
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
                 }
+                document.getElementById('title').value = '';
+                document.getElementById('description').value = '';
+                document.getElementById('priority').value = 'Low';
+                loadTickets();
             } catch (error) {
                 console.error('Error submitting ticket:', error);
+                alert(`Failed to submit ticket: ${error.message}`);
             }
         }
 
-        // Update ticket status
         async function updateTicketStatus(id, status) {
             try {
                 const response = await fetch(`/api/tickets/${id}`, {
@@ -154,17 +94,17 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status })
                 });
-                if (response.ok) {
-                    loadTickets();
-                } else {
-                    alert('Error updating ticket');
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
                 }
+                loadTickets();
             } catch (error) {
                 console.error('Error updating ticket:', error);
+                alert(`Failed to update ticket: ${error.message}`);
             }
         }
 
-        // Load tickets on page load
         loadTickets();
     </script>
 </body>

@@ -1,12 +1,17 @@
+require('dotenv').config({ debug: true });
 const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 const cors = require('cors');
+const path = require('path'); // Add this for explicit file serving
 const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public'))); // Explicit path
+
+console.log('SUPABASE_URL:', process.env.SUPABASE_URL);
+console.log('SUPABASE_KEY:', process.env.SUPABASE_KEY);
 
 const supabase = createClient(
     process.env.SUPABASE_URL,
@@ -43,6 +48,11 @@ app.put('/api/tickets/:id', async (req, res) => {
         return res.status(500).json({ error: error.message });
     }
     res.json({ updated: true });
+});
+
+// Explicitly serve index.html for root route
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.listen(port, () => {
