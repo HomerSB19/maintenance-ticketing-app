@@ -28,7 +28,6 @@
         <source src="https://www.soundjay.com/buttons/beep-01a.mp3" type="audio/mpeg">
     </audio>
     <div class="container mx-auto p-4 max-w-3xl">
-        <!-- HTML content unchanged from previous version -->
         <div id="auth-section" class="mb-4 flex justify-between items-center">
             <h1 class="text-2xl font-bold text-gray-800">Maintenance Ticketing App</h1>
             <div>
@@ -323,9 +322,8 @@
             let chartInstance = null;
             let isTestAlarmPlaying = false;
             let hasUserInteracted = false;
-            let lastTicketHash = null; // Cache for ticket data to detect changes
+            let lastTicketHash = null;
 
-            // Prompt user interaction on page load to enable audio
             window.addEventListener('load', () => {
                 const overlay = document.createElement('div');
                 overlay.style.position = 'fixed';
@@ -579,11 +577,9 @@
                     const tickets = await response.json();
                     console.log('checkForAlarms: Tickets received', tickets);
 
-                    // Filter for Open tickets client-side
                     const openTickets = tickets.filter(t => t.status === 'Open');
                     console.log('checkForAlarms: Open tickets', openTickets);
 
-                    // Create a hash of ticket data (ticket_id, created_at, status)
                     const ticketHash = tickets
                         .map(t => `${t.ticket_id}:${t.created_at}:${t.status}`)
                         .sort()
@@ -604,7 +600,6 @@
                         stopAlarm();
                     }
 
-                    // Update dashboard if new tickets detected
                     if (hasNewTickets) {
                         console.log('checkForAlarms: New tickets detected, updating dashboard');
                         await loadDashboard();
@@ -642,7 +637,6 @@
                     const downtimeData = await downtimeResponse.json();
                     console.log('loadDashboard: Downtime data received', downtimeData);
 
-                    // Only update UI if dashboard is visible
                     if (!document.getElementById('dashboard').classList.contains('hidden')) {
                         console.log('loadDashboard: Updating UI');
                         const lines = ['MRR', 'FCM', 'IDB', 'MGH', 'PPK', 'IAMM'];
@@ -922,9 +916,13 @@
                     let data = await response.json();
                     console.log('Analytics data:', data);
 
-                    if (type === 'tickets') {
-                        data = data.sort((a, b) => b.count - a.count || a.process.localeCompare(b.process));
-                    }
+                    // Filter out processes with zero values and sort by value (descending)
+                    data = data.filter(item => (type === 'downtime' ? item.downtime : item.count) > 0)
+                        .sort((a, b) => {
+                            const valueA = type === 'downtime' ? a.downtime : a.count;
+                            const valueB = type === 'downtime' ? b.downtime : b.count;
+                            return valueB - valueA || a.process.localeCompare(b.process);
+                        });
 
                     const labels = data.map(item => item.process);
                     const values = data.map(item => type === 'downtime' ? item.downtime : item.count);
@@ -1019,7 +1017,6 @@
                 }
             }
 
-            // Initialize app
             async function init() {
                 try {
                     if (accessToken) {
@@ -1033,9 +1030,8 @@
                     }
                     updateUIForRole();
                     showScreen('dashboard');
-                    // Start polling for alarms and dashboard updates
                     if (!alarmInterval) {
-                        alarmInterval = setInterval(checkForAlarms, 5000); // Poll every 5 seconds
+                        alarmInterval = setInterval(checkForAlarms, 5000);
                     }
                 } catch (error) {
                     console.error('Error initializing:', error);
