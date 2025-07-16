@@ -19,6 +19,7 @@ app.use((req, res, next) => {
     next();
 });
 
+// Login route
 app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -38,6 +39,7 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
+// Logout route
 app.post('/api/logout', async (req, res) => {
     try {
         res.json({ message: 'Logged out' });
@@ -46,6 +48,7 @@ app.post('/api/logout', async (req, res) => {
     }
 });
 
+// User route
 app.get('/api/user', async (req, res) => {
     const authHeader = req.headers.authorization;
     if (!authHeader) return res.status(401).json({ error: 'No token provided' });
@@ -64,6 +67,7 @@ app.get('/api/user', async (req, res) => {
     }
 });
 
+// Tickets routes
 app.get('/api/tickets', async (req, res) => {
     console.log('Handling GET /api/tickets', { query: req.query });
     try {
@@ -157,6 +161,7 @@ app.put('/api/tickets/:ticket_id/resolve', async (req, res) => {
     }
 });
 
+// Stats and analytics routes
 app.get('/api/ticket-stats', async (req, res) => {
     try {
         const now = new Date();
@@ -181,12 +186,14 @@ app.get('/api/ticket-stats', async (req, res) => {
 
 app.get('/api/downtime', async (req, res) => {
     try {
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 0, 0);
         const { data, error } = await supabase
             .from('tickets')
             .select('line, created_at, resolved_at')
-            .in('status', ['Open', 'Ongoing', 'Closed']);
+            .in('status', ['Open', 'Ongoing', 'Closed'])
+            .gte('created_at', todayStart.toISOString());
         if (error) throw error;
-        const now = new Date();
         const downtime = {};
         data.forEach(ticket => {
             const created = new Date(ticket.created_at);
