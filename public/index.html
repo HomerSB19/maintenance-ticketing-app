@@ -3,878 +3,524 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maintenance Ticketing App</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-    <style>
-        @keyframes flash-red {
-            0%, 100% { background-color: #ef4444; }
-            50% { background-color: #dc2626; }
-        }
-        @keyframes flash-yellow {
-            0%, 100% { background-color: #facc15; }
-            50% { background-color: #eab308; }
-        }
-        .flash-red { animation: flash-red 1s infinite; }
-        .flash-yellow { animation: flash-yellow 1s infinite; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 50; }
-        .modal-content { background: white; margin: 10% auto; padding: 20px; width: 90%; max-width: 800px; border-radius: 0.5rem; max-height: 80vh; overflow-y: auto; }
-        .modal-front { z-index: 60; }
-    </style>
+    <title>Maintenance Ticketing System</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <link rel="icon" href="/favicon.ico">
 </head>
-<body class="bg-gray-100 font-sans">
-    <audio id="alarm" src="https://www.soundjay.com/buttons/beep-01a.mp3" loop></audio>
-    <div class="container mx-auto p-4 max-w-7xl">
-        <div id="auth-section" class="mb-4 flex justify-between items-center">
-            <h1 class="text-3xl font-bold text-gray-800">Maintenance Ticketing App</h1>
+<body class="bg-gray-100">
+    <div id="login-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded shadow-lg">
+            <h2 class="text-lg font-bold mb-4">Login</h2>
+            <input id="login-email" type="email" placeholder="Email" class="border p-2 mb-2 w-full">
+            <input id="login-password" type="password" placeholder="Password" class="border p-2 mb-2 w-full">
+            <button onclick="login()" class="bg-blue-500 text-white px-4 py-2 rounded">Login</button>
+        </div>
+    </div>
+
+    <div id="dashboard" class="container mx-auto p-4 hidden">
+        <h1 class="text-2xl font-bold mb-4">Maintenance Dashboard</h1>
+        <div class="flex justify-between mb-4">
             <div>
-                <span id="user-role" class="text-gray-700 mr-4"></span>
-                <button id="login-btn" onclick="showLoginModal()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Login</button>
-                <button id="logout-btn" onclick="logout()" class="hidden px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Logout</button>
+                <button onclick="showScreen('submit-ticket')" class="bg-blue-500 text-white px-4 py-2 rounded mr-2">Submit Ticket</button>
+                <button onclick="showScreen('all-tickets')" class="bg-blue-500 text-white px-4 py-2 rounded mr-2">All Tickets</button>
+                <button onclick="showScreen('analytics')" class="bg-blue-500 text-white px-4 py-2 rounded">Analytics</button>
             </div>
+            <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded">Logout</button>
         </div>
-        <div id="nav-buttons" class="flex flex-wrap gap-4 mb-6">
-            <button id="submit-ticket-btn" onclick="showScreen('submit-ticket')" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 hidden">Submit Ticket</button>
-            <button id="dashboard-btn" onclick="showScreen('dashboard')" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 hidden">Dashboard</button>
-            <button id="all-tickets-btn" onclick="showScreen('all-tickets')" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 hidden">All Tickets</button>
-            <button id="analytics-btn" onclick="showScreen('analytics')" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 hidden">Analytics</button>
+        <div id="manager-controls" class="mb-4 hidden">
+            <button id="test-alarm" onclick="testAlarm()" class="bg-green-500 text-white px-4 py-2 rounded">Test Alarm</button>
         </div>
-
-        <!-- Submit Ticket Screen -->
-        <div id="submit-ticket" class="screen hidden">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Submit a New Ticket</h2>
-            <form onsubmit="event.preventDefault(); submitTicket();" class="bg-white p-6 rounded-lg shadow-md">
-                <div class="mb-4">
-                    <label for="employee-id" class="block text-gray-700 font-medium">ID de Empleado:</label>
-                    <input type="text" id="employee-id" class="mt-1 p-2 w-full border rounded focus:outline-none focus:ring-2 focus:ring-blue-600" required>
-                </div>
-                <div class="mb-4">
-                    <label for="name" class="block text-gray-700 font-medium">Nombre:</label>
-                    <input type="text" id="name" class="mt-1 p-2 w-full border rounded focus:outline-none focus:ring-2 focus:ring-blue-600" required>
-                </div>
-                <div class="mb-4">
-                    <label for="line" class="block text-gray-700 font-medium">Línea:</label>
-                    <select id="line" onchange="updateOperations()" class="mt-1 p-2 w-full border rounded focus:outline-none focus:ring-2 focus:ring-blue-600" required>
-                        <option value="">Select Line</option>
-                        <option value="MRR">MRR</option>
-                        <option value="FCM">FCM</option>
-                        <option value="IDB">IDB</option>
-                        <option value="MGH">MGH</option>
-                        <option value="PPK">PPK</option>
-                        <option value="IAMM">IAMM</option>
-                    </select>
-                </div>
-                <div class="mb-4">
-                    <label for="operation" class="block text-gray-700 font-medium">Operación:</label>
-                    <select id="operation" class="mt-1 p-2 w-full border rounded focus:outline-none focus:ring-2 focus:ring-blue-600" required>
-                        <option value="">Select Operation</option>
-                    </select>
-                </div>
-                <div class="mb-4">
-                    <label for="description" class="block text-gray-700 font-medium">Descripción del Problema:</label>
-                    <textarea id="description" class="mt-1 p-2 w-full border rounded focus:outline-none focus:ring-2 focus:ring-blue-600" required></textarea>
-                </div>
-                <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Submit Ticket</button>
-            </form>
+        <div class="grid grid-cols-3 gap-4 mb-4">
+            <div id="MRR" class="p-4 border rounded"><h2 class="font-bold">MRR</h2><p id="MRR-tickets">0 open, 0 ongoing</p></div>
+            <div id="FCM" class="p-4 border rounded"><h2 class="font-bold">FCM</h2><p id="FCM-tickets">0 open, 0 ongoing</p></div>
+            <div id="IAMM" class="p-4 border rounded"><h2 class="font-bold">IAMM</h2><p id="IAMM-tickets">0 open, 0 ongoing</p></div>
         </div>
+        <p id="tickets-today" class="mb-4">Tickets generated today: 0</p>
+        <table class="w-full border">
+            <thead>
+                <tr><th class="border p-2">Line</th><th class="border p-2">Downtime (minutes)</th></tr>
+            </thead>
+            <tbody id="downtime-table"></tbody>
+        </table>
+    </div>
 
-        <!-- Dashboard Screen -->
-        <div id="dashboard" class="screen hidden">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Dashboard</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                <div id="mrr-box" class="p-6 rounded-lg shadow-md text-center cursor-pointer" onclick="loadLineTickets('MRR')">
-                    <h3 class="text-xl font-bold text-gray-800">MRR</h3>
-                    <p class="text-gray-800">Open: <span id="mrr-open">0</span></p>
-                    <p class="text-gray-800">Ongoing: <span id="mrr-ongoing">0</span></p>
-                </div>
-                <div id="fcm-box" class="p-6 rounded-lg shadow-md text-center cursor-pointer" onclick="loadLineTickets('FCM')">
-                    <h3 class="text-xl font-bold text-gray-800">FCM</h3>
-                    <p class="text-gray-800">Open: <span id="fcm-open">0</span></p>
-                    <p class="text-gray-800">Ongoing: <span id="fcm-ongoing">0</span></p>
-                </div>
-                <div id="idb-box" class="p-6 rounded-lg shadow-md text-center cursor-pointer" onclick="loadLineTickets('IDB')">
-                    <h3 class="text-xl font-bold text-gray-800">IDB</h3>
-                    <p class="text-gray-800">Open: <span id="idb-open">0</span></p>
-                    <p class="text-gray-800">Ongoing: <span id="idb-ongoing">0</span></p>
-                </div>
-                <div id="mgh-box" class="p-6 rounded-lg shadow-md text-center cursor-pointer" onclick="loadLineTickets('MGH')">
-                    <h3 class="text-xl font-bold text-gray-800">MGH</h3>
-                    <p class="text-gray-800">Open: <span id="mgh-open">0</span></p>
-                    <p class="text-gray-800">Ongoing: <span id="mgh-ongoing">0</span></p>
-                </div>
-                <div id="ppk-box" class="p-6 rounded-lg shadow-md text-center cursor-pointer" onclick="loadLineTickets('PPK')">
-                    <h3 class="text-xl font-bold text-gray-800">PPK</h3>
-                    <p class="text-gray-800">Open: <span id="ppk-open">0</span></p>
-                    <p class="text-gray-800">Ongoing: <span id="ppk-ongoing">0</span></p>
-                </div>
-                <div id="iamm-box" class="p-6 rounded-lg shadow-md text-center cursor-pointer" onclick="loadLineTickets('IAMM')">
-                    <h3 class="text-xl font-bold text-gray-800">IAMM</h3>
-                    <p class="text-gray-800">Open: <span id="iamm-open">0</span></p>
-                    <p class="text-gray-800">Ongoing: <span id="iamm-ongoing">0</span></p>
-                </div>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                <div class="bg-white p-6 rounded-lg shadow-md">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-2">Tickets Generated Today (8AM - 8AM)</h3>
-                    <p class="text-gray-700" id="tickets-today">0</p>
-                </div>
-                <div class="bg-white p-6 rounded-lg shadow-md">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-2">Tickets Generated This Week</h3>
-                    <p class="text-gray-700" id="tickets-week">0</p>
-                </div>
-            </div>
-            <div class="bg-white p-6 rounded-lg shadow-md">
-                <h3 class="text-lg font-semibold text-gray-800 mb-2">Daily Downtime per Line (8AM - 8AM)</h3>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full bg-white rounded-lg">
-                        <thead>
-                            <tr class="bg-gray-200">
-                                <th class="p-3 text-left text-gray-700">Line</th>
-                                <th class="p-3 text-left text-gray-700">Downtime (Minutes)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="downtime-table"></tbody>
-                    </table>
-                </div>
-            </div>
+    <div id="submit-ticket" class="container mx-auto p-4 hidden">
+        <h1 class="text-2xl font-bold mb-4">Submit Ticket</h1>
+        <div class="mb-4">
+            <input id="employee-id" type="text" placeholder="Employee ID" class="border p-2 mr-2">
+            <input id="name" type="text" placeholder="Name" class="border p-2 mr-2">
+            <select id="line" class="border p-2 mr-2">
+                <option value="">Select Line</option>
+                <option value="MRR">MRR</option>
+                <option value="FCM">FCM</option>
+                <option value="IAMM">IAMM</option>
+            </select>
+            <select id="operation" class="border p-2 mr-2">
+                <option value="">Select Operation</option>
+            </select>
+            <textarea id="description" placeholder="Description" class="border p-2 w-full"></textarea>
+            <button onclick="submitTicket()" class="bg-blue-500 text-white px-4 py-2 rounded mt-2">Submit</button>
         </div>
+        <button onclick="showScreen('dashboard')" class="bg-gray-500 text-white px-4 py-2 rounded">Back</button>
+    </div>
 
-        <!-- All Tickets Screen -->
-        <div id="all-tickets" class="screen hidden">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4">All Tickets</h2>
-            <div class="mb-4">
-                <label for="filter-status" class="block text-gray-700 font-medium">Filter by Status:</label>
-                <select id="filter-status" onchange="loadAllTickets()" class="mt-1 p-2 w-full sm:w-48 border rounded focus:outline-none focus:ring-2 focus:ring-blue-600">
-                    <option value="">All</option>
-                    <option value="Open">Open</option>
-                    <option value="Ongoing">Ongoing</option>
-                    <option value="Closed">Closed</option>
-                </select>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full bg-white rounded-lg shadow-md">
-                    <thead>
-                        <tr class="bg-gray-200">
-                            <th class="p-3 text-left text-gray-700">Ticket ID</th>
-                            <th class="p-3 text-left text-gray-700">Employee ID</th>
-                            <th class="p-3 text-left text-gray-700">Line</th>
-                            <th class="p-3 text-left text-gray-700">Process</th>
-                            <th class="p-3 text-left text-gray-700">Created At</th>
-                            <th class="p-3 text-left text-gray-700">Description</th>
-                            <th class="p-3 text-left text-gray-700">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ticket-list"></tbody>
-                </table>
-            </div>
+    <div id="all-tickets" class="container mx-auto p-4 hidden">
+        <h1 class="text-2xl font-bold mb-4">All Tickets</h1>
+        <div class="mb-4">
+            <select id="ticket-filter" class="border p-2">
+                <option value="">All</option>
+                <option value="Open">Open</option>
+                <option value="Ongoing">Ongoing</option>
+                <option value="Closed">Closed</option>
+            </select>
+            <button onclick="filterTickets()" class="bg-blue-500 text-white px-4 py-2 rounded">Filter</button>
         </div>
+        <table class="w-full border">
+            <thead>
+                <tr><th class="border p-2">Ticket ID</th><th class="border p-2">Line</th><th class="border p-2">Process</th><th class="border p-2">Description</th><th class="border p-2">Status</th><th class="border p-2">Actions</th></tr>
+            </thead>
+            <tbody id="tickets-table"></tbody>
+        </table>
+        <button onclick="showScreen('dashboard')" class="bg-gray-500 text-white px-4 py-2 rounded mt-4">Back</button>
+    </div>
 
-        <!-- Analytics Screen -->
-        <div id="analytics" class="screen hidden">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Analytics</h2>
-            <div class="mb-4 flex space-x-4">
-                <div>
-                    <label for="analytics-line" class="block text-gray-700 font-medium">Select Line:</label>
-                    <select id="analytics-line" onchange="loadAnalytics()" class="mt-1 p-2 w-full border rounded focus:outline-none focus:ring-2 focus:ring-blue-600">
-                        <option value="">Select Line</option>
-                        <option value="MRR">MRR</option>
-                        <option value="FCM">FCM</option>
-                        <option value="IDB">IDB</option>
-                        <option value="MGH">MGH</option>
-                        <option value="PPK">PPK</option>
-                        <option value="IAMM">IAMM</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="analytics-type" class="block text-gray-700 font-medium">Select Chart Type:</label>
-                    <select id="analytics-type" onchange="loadAnalytics()" class="mt-1 p-2 w-full border rounded focus:outline-none focus:ring-2 focus:ring-blue-600">
-                        <option value="downtime">Downtime per Process</option>
-                        <option value="tickets">Tickets per Process</option>
-                    </select>
-                </div>
-            </div>
-            <div class="bg-white p-6 rounded-lg shadow-md">
-                <canvas id="analytics-chart" height="400"></canvas>
-            </div>
+    <div id="analytics" class="container mx-auto p-4 hidden">
+        <h1 class="text-2xl font-bold mb-4">Analytics</h1>
+        <div class="mb-4">
+            <select id="analytics-line" class="border p-2 mr-2">
+                <option value="">All Lines</option>
+                <option value="MRR">MRR</option>
+                <option value="FCM">FCM</option>
+                <option value="IAMM">IAMM</option>
+            </select>
+            <select id="analytics-type" class="border p-2 mr-2">
+                <option value="downtime">Downtime per Line</option>
+                <option value="tickets-by-process">Tickets per Process</option>
+            </select>
+            <input id="from-date" type="date" class="border p-2 mr-2" placeholder="From">
+            <input id="to-date" type="date" class="border p-2 mr-2" placeholder="To">
+            <button onclick="updateAnalytics()" class="bg-blue-500 text-white px-4 py-2 rounded">Update</button>
         </div>
-
-        <!-- Login Modal -->
-        <div id="login-modal" class="modal modal-front">
-            <div class="modal-content">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Login</h2>
-                <div class="mb-4">
-                    <label for="login-email" class="block text-gray-700 font-medium">Email:</label>
-                    <input type="email" id="login-email" class="mt-1 p-2 w-full border rounded focus:outline-none focus:ring-2 focus:ring-blue-600" required>
-                </div>
-                <div class="mb-4">
-                    <label for="login-password" class="block text-gray-700 font-medium">Password:</label>
-                    <input type="password" id="login-password" class="mt-1 p-2 w-full border rounded focus:outline-none focus:ring-2 focus:ring-blue-600" required>
-                </div>
-                <div class="mt-4 flex space-x-4">
-                    <button onclick="login()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Login</button>
-                    <button onclick="closeModal('login-modal')" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Cancel</button>
-                </div>
-            </div>
+        <div class="w-full max-w-lg">
+            <canvas id="analytics-chart" style="max-height: 300px;"></canvas>
         </div>
-
-        <!-- Ticket Details Modal -->
-        <div id="ticket-details-modal" class="modal modal-front">
-            <div class="modal-content">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Ticket Details</h2>
-                <div id="ticket-details-content" class="text-gray-700"></div>
-                <button onclick="closeModal('ticket-details-modal')" class="mt-4 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Close</button>
-            </div>
+        <div class="mt-4">
+            <h2 class="text-xl font-bold mb-2">Technician Performance</h2>
+            <table class="w-full border">
+                <thead>
+                    <tr>
+                        <th class="border p-2">Technician</th>
+                        <th class="border p-2">Tickets Resolved</th>
+                        <th class="border p-2">Total Resolve Time (minutes)</th>
+                        <th class="border p-2">Total Downtime (minutes)</th>
+                    </tr>
+                </thead>
+                <tbody id="technician-table"></tbody>
+            </table>
         </div>
+        <button onclick="showScreen('dashboard')" class="bg-gray-500 text-white px-4 py-2 rounded mt-4">Back</button>
+    </div>
 
-        <!-- Assign Ticket Modal -->
-        <div id="assign-ticket-modal" class="modal modal-front">
-            <div class="modal-content">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Assign Ticket</h2>
-                <label for="technician-name" class="block text-gray-700 font-medium">Technician Name:</label>
-                <input type="text" id="technician-name" class="mt-1 p-2 w-full border rounded focus:outline-none focus:ring-2 focus:ring-blue-600" required>
-                <div class="mt-4 flex space-x-4">
-                    <button onclick="assignTicket()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Assign</button>
-                    <button onclick="closeModal('assign-ticket-modal')" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Cancel</button>
-                </div>
-            </div>
-        </div>
+    <script>
+        let accessToken = localStorage.getItem('accessToken') || null;
+        let currentUser = null;
+        const audio = new Audio('/beep-01a.mp3');
+        let isTestAlarmPlaying = false;
 
-        <!-- Resolve Ticket Modal -->
-        <div id="resolve-ticket-modal" class="modal modal-front">
-            <div class="modal-content">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Resolve Ticket</h2>
-                <label for="issue" class="block text-gray-700 font-medium">Issue:</label>
-                <textarea id="issue" class="mt-1 p-2 w-full border rounded focus:outline-none focus:ring-2 focus:ring-blue-600" required></textarea>
-                <label for="fix" class="block text-gray-700 font-medium mt-4">Fix:</label>
-                <textarea id="fix" class="mt-1 p-2 w-full border rounded focus:outline-none focus:ring-2 focus:ring-blue-600" required></textarea>
-                <div class="mt-4 flex space-x-4">
-                    <button onclick="resolveTicket()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Resolve Ticket</button>
-                    <button onclick="closeModal('resolve-ticket-modal')" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Cancel</button>
-                </div>
-            </div>
-        </div>
+        const processes = {
+            MRR: ['Magazine Loader', 'ICT', 'HOT CHAMBER'],
+            FCM: ['Process A', 'Process B', 'Process C'],
+            IAMM: ['Process X', 'Process Y', 'Process Z']
+        };
 
-        <!-- Line Tickets Modal -->
-        <div id="line-tickets-modal" class="modal">
-            <div class="modal-content">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Tickets for <span id="line-title"></span></h2>
-                <div id="line-tickets-content" class="space-y-4"></div>
-                <button onclick="closeModal('line-tickets-modal')" class="mt-4 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Close</button>
-            </div>
-        </div>
-
-        <script>
-            const operationsByLine = {
-                MRR: [
-                    'Magazine Loading', 'Flash Programming', 'PCB Separation', 'ICT',
-                    'Housing Loader', 'Tim Dispensing', 'PCB Assembly', 'Cavity Plate Seating',
-                    'Screwing', 'Sealant Application', 'Radome Assembly', 'Curing',
-                    'Leak Test', 'Calibration Loader', 'EOL', 'Labelling', 'Bracket Assembly',
-                    'General Conveyors'
-                ],
-                FCM: [
-                    'Magazine Loading', 'Flash Programming', 'PCB Separation', 'ICT',
-                    'Conformal Coating', 'Coating Inspection', 'Palletizer', 'Module-Flex PCB Connect',
-                    'Imager Module Screwing', 'ECU-Flex PCB Conect', 'TIM Dispensing',
-                    'Lower Housing Screwing', 'Calibration Loader', 'Aging 1', 'Aging2',
-                    'EOL Test', 'Labeling', 'Coupler Assembly', 'General Conveyors'
-                ],
-                IDB: [
-                    'Magazine Loading', 'Fuse Bending', 'Flash Programming', 'ICT',
-                    'Conformal Coating', 'Coating Inspection', 'PCB Separation', 'Press Fit (Main)',
-                    'TIM dispensing', 'FIPG Dispensing', 'Dispensing Inspection', 'Cover Assembly',
-                    'CIPG Dispensing', 'CIPG Inspection', 'Input Robot', 'Hot chamber',
-                    'Output Robot', 'Hot Function Test', 'Cooling', 'Leak Test',
-                    'Coil height & CIPG', 'Label', 'General Conveyors'
-                ],
-                MGH: [
-                    'Magazine Loading', 'Flash Programming', 'PCB Separation', 'Fuse Bending',
-                    'ICT', 'Conformal Coating', 'Coating Inspection', 'Curing',
-                    'Press Fit (Main)', 'Vibration Welding', 'Vacuum Cleaner', 'Leak Test',
-                    'Hot chamber', 'Hot Function Test', 'Cooling', 'Coil Height',
-                    'Pin Check', 'Laser Marking', 'Packing', 'General Conveyors'
-                ],
-                IAMM: [
-                    'Magazine Loading', 'Flash Programming', 'ICT', 'PCB Separation',
-                    'Press Fit (PCB)', 'Press Fit (Coil)', 'Vibration Welding', 'Leak Test',
-                    'EOL', 'Pin Check', 'Label', 'Packing', 'General Conveyors'
-                ],
-                PPK: [
-                    'Magazine Loading', 'ICT/Flash Programing', 'PCB Separation', 'PCB Loading',
-                    'Conformal Coating', 'Curing', 'Coating Inspection', 'Manual Insertion Components',
-                    'Selective Soldering', 'XRAY', 'AOI', 'ECU Function Test', 'Packing',
-                    'General Conveyors'
-                ]
-            };
-
-            let currentUser = null;
-            let accessToken = null;
-            let alarmInterval = null;
-            let chartInstance = null;
-
-            function updateOperations() {
-                const line = document.getElementById('line').value;
-                const operationSelect = document.getElementById('operation');
-                operationSelect.innerHTML = '<option value="">Select Operation</option>';
-                if (line && operationsByLine[line]) {
-                    operationsByLine[line].forEach(op => {
-                        const option = document.createElement('option');
-                        option.value = op;
-                        option.textContent = op;
-                        operationSelect.appendChild(option);
-                    });
-                }
-            }
-
-            function showScreen(screenId) {
-                document.querySelectorAll('.screen').forEach(screen => {
-                    screen.classList.add('hidden');
-                });
-                document.getElementById(screenId).classList.remove('hidden');
-                if (screenId === 'dashboard') loadDashboard();
-                if (screenId === 'all-tickets') loadAllTickets();
-                if (screenId === 'analytics') loadAnalytics();
-            }
-
-            function showModal(modalId, ticketId = null, line = null) {
-                console.log('showModal called with:', { modalId, ticketId, line });
-                currentTicketId = ticketId;
-                currentLine = line;
-                const modal = document.getElementById(modalId);
-                if (modal) {
-                    modal.style.display = 'block';
-                    if (modalId === 'ticket-details-modal' && ticketId) {
-                        loadTicketDetails(ticketId);
-                    }
-                } else {
-                    console.error(`Modal with ID ${modalId} not found`);
-                    alert(`Error: Modal ${modalId} not found`);
-                }
-            }
-
-            function closeModal(modalId) {
-                console.log('closeModal called with:', { modalId });
-                const modal = document.getElementById(modalId);
-                if (modal) {
-                    modal.style.display = 'none';
-                } else {
-                    console.error(`Modal with ID ${modalId} not found`);
-                }
-                document.getElementById('technician-name').value = '';
-                document.getElementById('issue').value = '';
-                document.getElementById('fix').value = '';
-                document.getElementById('login-email').value = '';
-                document.getElementById('login-password').value = '';
-            }
-
-            function showLoginModal() {
-                showModal('login-modal');
-            }
-
-            async function login() {
-                const email = document.getElementById('login-email').value;
-                const password = document.getElementById('login-password').value;
-                if (!email || !password) {
-                    alert('Please enter email and password');
-                    return;
-                }
+        async function init() {
+            if (accessToken) {
                 try {
-                    const response = await fetch('/api/login', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email, password })
+                    const response = await fetch('/api/user', {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    const { access_token, role } = await response.json();
-                    accessToken = access_token;
-                    currentUser = { role };
-                    updateUIForRole();
-                    closeModal('login-modal');
-                    showScreen('dashboard');
-                } catch (error) {
-                    console.error('Error logging in:', error);
-                    alert(`Failed to login: ${error.message}`);
-                }
-            }
-
-            async function logout() {
-                try {
-                    const response = await fetch('/api/logout', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    accessToken = null;
-                    currentUser = null;
-                    updateUIForRole();
-                    stopAlarm();
-                    showScreen('dashboard');
-                } catch (error) {
-                    console.error('Error logging out:', error);
-                    alert(`Failed to logout: ${error.message}`);
-                }
-            }
-
-            function updateUIForRole() {
-                const loginBtn = document.getElementById('login-btn');
-                const logoutBtn = document.getElementById('logout-btn');
-                const submitTicketBtn = document.getElementById('submit-ticket-btn');
-                const dashboardBtn = document.getElementById('dashboard-btn');
-                const allTicketsBtn = document.getElementById('all-tickets-btn');
-                const analyticsBtn = document.getElementById('analytics-btn');
-                const userRole = document.getElementById('user-role');
-
-                if (!currentUser) {
-                    loginBtn.classList.remove('hidden');
-                    logoutBtn.classList.add('hidden');
-                    submitTicketBtn.classList.add('hidden');
-                    dashboardBtn.classList.add('hidden');
-                    allTicketsBtn.classList.add('hidden');
-                    analyticsBtn.classList.add('hidden');
-                    userRole.textContent = 'Not logged in';
-                    return;
-                }
-
-                loginBtn.classList.add('hidden');
-                logoutBtn.classList.remove('hidden');
-                userRole.textContent = `Role: ${currentUser.role}`;
-
-                if (currentUser.role === 'Line Leader') {
-                    submitTicketBtn.classList.remove('hidden');
-                    dashboardBtn.classList.add('hidden');
-                    allTicketsBtn.classList.remove('hidden');
-                    analyticsBtn.classList.add('hidden');
-                } else if (currentUser.role === 'Maintenance Technician' || currentUser.role === 'Test Technician') {
-                    submitTicketBtn.classList.add('hidden');
-                    dashboardBtn.classList.remove('hidden');
-                    allTicketsBtn.classList.remove('hidden');
-                    analyticsBtn.classList.remove('hidden');
-                } else if (currentUser.role === 'Manager') {
-                    submitTicketBtn.classList.remove('hidden');
-                    dashboardBtn.classList.remove('hidden');
-                    allTicketsBtn.classList.remove('hidden');
-                    analyticsBtn.classList.remove('hidden');
-                }
-            }
-
-            let currentTicketId = null;
-            let currentLine = null;
-
-            async function submitTicket() {
-                const employeeId = document.getElementById('employee-id').value;
-                const name = document.getElementById('name').value;
-                const line = document.getElementById('line').value;
-                const process = document.getElementById('operation').value;
-                const description = document.getElementById('description').value;
-
-                if (!employeeId || !name || !line || !process || !description) {
-                    alert('Please fill in all fields');
-                    return;
-                }
-
-                try {
-                    const response = await fetch('/api/tickets', {
-                        method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${accessToken}`
-                        },
-                        body: JSON.stringify({ employee_id: employeeId, name, line, process, description, status: 'Open' })
-                    });
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`HTTP ${response.status}: ${errorText}`);
-                    }
-                    document.getElementById('employee-id').value = '';
-                    document.getElementById('name').value = '';
-                    document.getElementById('line').value = '';
-                    document.getElementById('operation').innerHTML = '<option value="">Select Operation</option>';
-                    document.getElementById('description').value = '';
-                    alert('Ticket submitted successfully');
-                    showScreen('dashboard');
-                } catch (error) {
-                    console.error('Error submitting ticket:', error);
-                    alert(`Failed to submit ticket: ${error.message}`);
-                }
-            }
-
-            function startAlarm() {
-                const alarm = document.getElementById('alarm');
-                alarm.play().catch(error => console.error('Error playing alarm:', error));
-            }
-
-            function stopAlarm() {
-                const alarm = document.getElementById('alarm');
-                alarm.pause();
-                alarm.currentTime = 0;
-                if (alarmInterval) {
-                    clearInterval(alarmInterval);
-                    alarmInterval = null;
-                }
-            }
-
-            async function checkForAlarms() {
-                try {
-                    const response = await fetch('/api/tickets?status=Open');
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    const tickets = await response.json();
-                    const now = new Date();
-                    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
-                    const overdueTickets = tickets.filter(ticket => new Date(ticket.created_at) < fiveMinutesAgo);
-                    if (overdueTickets.length > 0) {
-                        startAlarm();
-                    } else {
-                        stopAlarm();
+                    if (response.ok) {
+                        const { role } = await response.json();
+                        currentUser = { role };
                     }
                 } catch (error) {
-                    console.error('Error checking alarms:', error);
+                    console.error('Error initializing:', error);
                 }
             }
-
-            async function loadDashboard() {
-                try {
-                    const ticketResponse = await fetch('/api/tickets');
-                    if (!ticketResponse.ok) throw new Error(`HTTP ${ticketResponse.status}`);
-                    const tickets = await ticketResponse.json();
-
-                    const statsResponse = await fetch('/api/ticket-stats');
-                    if (!statsResponse.ok) throw new Error(`HTTP ${statsResponse.status}`);
-                    const stats = await statsResponse.json();
-
-                    const downtimeResponse = await fetch('/api/downtime');
-                    if (!downtimeResponse.ok) throw new Error(`HTTP ${downtimeResponse.status}`);
-                    const downtimeData = await downtimeResponse.json();
-
-                    const lines = ['MRR', 'FCM', 'IDB', 'MGH', 'PPK', 'IAMM'];
-                    lines.forEach(line => {
-                        const openTickets = tickets.filter(t => t.line === line && t.status === 'Open').length;
-                        const ongoingTickets = tickets.filter(t => t.line === line && t.status === 'Ongoing').length;
-                        const box = document.getElementById(`${line.toLowerCase()}-box`);
-                        box.classList.remove('flash-red', 'flash-yellow', 'bg-green-200');
-                        if (openTickets > 0) {
-                            box.classList.add('flash-red');
-                        } else if (ongoingTickets > 0) {
-                            box.classList.add('flash-yellow');
-                        } else {
-                            box.classList.add('bg-green-200');
-                        }
-                        document.getElementById(`${line.toLowerCase()}-open`).textContent = openTickets;
-                        document.getElementById(`${line.toLowerCase()}-ongoing`).textContent = ongoingTickets;
-                    });
-
-                    document.getElementById('tickets-today').textContent = stats.today;
-                    document.getElementById('tickets-week').textContent = stats.week;
-
-                    const downtimeTable = document.getElementById('downtime-table');
-                    downtimeTable.innerHTML = '';
-                    downtimeData.forEach(({ line, downtime }) => {
-                        const row = document.createElement('tr');
-                        row.className = 'hover:bg-gray-50';
-                        row.innerHTML = `
-                            <td class="p-3">${line}</td>
-                            <td class="p-3">${downtime}</td>
-                        `;
-                        downtimeTable.appendChild(row);
-                    });
-
-                    // Check for alarms
-                    await checkForAlarms();
-                    if (!alarmInterval) {
-                        alarmInterval = setInterval(checkForAlarms, 30000);
-                    }
-                } catch (error) {
-                    console.error('Error loading dashboard:', error);
-                    alert(`Failed to load dashboard: ${error.message}`);
-                }
-            }
-
-            async function loadAllTickets() {
-                try {
-                    const filterStatus = document.getElementById('filter-status').value;
-                    const response = await fetch('/api/tickets' + (filterStatus ? `?status=${filterStatus}` : ''));
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    const tickets = await response.json();
-                    const ticketList = document.getElementById('ticket-list');
-                    ticketList.innerHTML = '';
-                    tickets.forEach(ticket => {
-                        const row = document.createElement('tr');
-                        row.className = 'hover:bg-gray-50';
-                        row.innerHTML = `
-                            <td class="p-3"><a href="#" onclick="showModal('ticket-details-modal', '${ticket.ticket_id}')" class="text-blue-600 hover:underline">${ticket.ticket_id}</a></td>
-                            <td class="p-3">${ticket.employee_id}</td>
-                            <td class="p-3">${ticket.line}</td>
-                            <td class="p-3">${ticket.process}</td>
-                            <td class="p-3">${new Date(ticket.created_at).toLocaleString()}</td>
-                            <td class="p-3">${ticket.description}</td>
-                            <td class="p-3"><a href="#" onclick="handleStatusClick('${ticket.ticket_id}', '${ticket.status}')" class="text-blue-600 hover:underline">${ticket.status}</a></td>
-                        `;
-                        ticketList.appendChild(row);
-                    });
-                } catch (error) {
-                    console.error('Error loading tickets:', error);
-                    alert(`Failed to load tickets: ${error.message}`);
-                }
-            }
-
-            async function loadTicketDetails(ticketId) {
-                try {
-                    const response = await fetch(`/api/tickets/${ticketId}`);
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    const ticket = await response.json();
-                    document.getElementById('ticket-details-content').innerHTML = `
-                        <p class="mb-2"><strong>Ticket ID:</strong> ${ticket.ticket_id}</p>
-                        <p class="mb-2"><strong>Employee ID:</strong> ${ticket.employee_id}</p>
-                        <p class="mb-2"><strong>Name:</strong> ${ticket.name}</p>
-                        <p class="mb-2"><strong>Line:</strong> ${ticket.line}</p>
-                        <p class="mb-2"><strong>Process:</strong> ${ticket.process}</p>
-                        <p class="mb-2"><strong>Created At:</strong> ${new Date(ticket.created_at).toLocaleString()}</p>
-                        <p class="mb-2"><strong>Description:</strong> ${ticket.description}</p>
-                        <p class="mb-2"><strong>Status:</strong> ${ticket.status}</p>
-                        <p class="mb-2"><strong>Assigned To:</strong> ${ticket.assigned_to || 'Not assigned'}</p>
-                        <p class="mb-2"><strong>Assigned At:</strong> ${ticket.assigned_at ? new Date(ticket.assigned_at).toLocaleString() : 'N/A'}</p>
-                        <p class="mb-2"><strong>Resolved At:</strong> ${ticket.resolved_at ? new Date(ticket.resolved_at).toLocaleString() : 'N/A'}</p>
-                        <p class="mb-2"><strong>Resolved By:</strong> ${ticket.resolved_by || 'N/A'}</p>
-                        <p class="mb-2"><strong>Issue:</strong> ${ticket.issue || 'N/A'}</p>
-                        <p class="mb-2"><strong>Fix:</strong> ${ticket.fix || 'N/A'}</p>
-                    `;
-                } catch (error) {
-                    console.error('Error loading ticket details:', error);
-                    alert(`Failed to load ticket details: ${error.message}`);
-                }
-            }
-
-            async function loadLineTickets(line) {
-                console.log('loadLineTickets called with:', { line });
-                try {
-                    const response = await fetch(`/api/tickets?status=Open,Ongoing`);
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    const tickets = await response.json();
-                    const lineTickets = tickets.filter(t => t.line === line && ['Open', 'Ongoing'].includes(t.status));
-                    document.getElementById('line-title').textContent = line;
-                    const content = document.getElementById('line-tickets-content');
-                    content.innerHTML = '';
-                    if (lineTickets.length === 0) {
-                        content.innerHTML = '<p class="text-gray-600">No Open or Ongoing tickets for this line.</p>';
-                    } else {
-                        lineTickets.forEach(ticket => {
-                            const ticketDiv = document.createElement('div');
-                            ticketDiv.className = 'bg-white p-4 rounded-lg shadow-md mb-4';
-                            let buttons = `
-                                <button class="details-btn px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700" data-ticket-id="${ticket.ticket_id}">Details</button>
-                            `;
-                            if (currentUser?.role === 'Manager') {
-                                if (ticket.status === 'Open') {
-                                    buttons += `<button class="assign-btn px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700" data-ticket-id="${ticket.ticket_id}" data-status="Open">Assign</button>`;
-                                } else if (ticket.status === 'Ongoing') {
-                                    buttons += `<button class="resolve-btn px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700" data-ticket-id="${ticket.ticket_id}" data-status="Ongoing">Resolve</button>`;
-                                }
-                            }
-                            ticketDiv.innerHTML = `
-                                <p class="font-semibold text-gray-800">${ticket.ticket_id} (Status: ${ticket.status})</p>
-                                <p class="text-gray-600">Process: ${ticket.process}</p>
-                                <p class="text-gray-600">Description: ${ticket.description}</p>
-                                <p class="text-gray-600">Created: ${new Date(ticket.created_at).toLocaleString()}</p>
-                                <div class="mt-2 flex space-x-2">${buttons}</div>
-                            `;
-                            content.appendChild(ticketDiv);
-                        });
-                    }
-                    showModal('line-tickets-modal', null, line);
-                    content.addEventListener('click', (event) => {
-                        const target = event.target;
-                        if (target.classList.contains('details-btn')) {
-                            const ticketId = target.getAttribute('data-ticket-id');
-                            console.log('Details button clicked:', { ticketId });
-                            showModal('ticket-details-modal', ticketId);
-                        } else if (target.classList.contains('assign-btn') && currentUser?.role === 'Manager') {
-                            const ticketId = target.getAttribute('data-ticket-id');
-                            const status = target.getAttribute('data-status');
-                            console.log('Assign button clicked:', { ticketId, status });
-                            handleStatusClick(ticketId, status);
-                        } else if (target.classList.contains('resolve-btn') && currentUser?.role === 'Manager') {
-                            const ticketId = target.getAttribute('data-ticket-id');
-                            const status = target.getAttribute('data-status');
-                            console.log('Resolve button clicked:', { ticketId, status });
-                            handleStatusClick(ticketId, status);
-                        }
-                    });
-                } catch (error) {
-                    console.error('Error loading line tickets:', error);
-                    alert(`Failed to load line tickets: ${error.message}`);
-                }
-            }
-
-            function handleStatusClick(ticketId, status) {
-                console.log('handleStatusClick called with:', { ticketId, status });
-                if (!ticketId) {
-                    console.error('No ticketId provided to handleStatusClick');
-                    alert('Error: No ticket selected');
-                    return;
-                }
-                currentTicketId = ticketId;
-                console.log('Set currentTicketId:', currentTicketId);
-                if (status === 'Open' && currentUser?.role === 'Manager') {
-                    showModal('assign-ticket-modal', ticketId);
-                } else if (status === 'Ongoing' && currentUser?.role === 'Manager') {
-                    showModal('resolve-ticket-modal', ticketId);
-                }
-            }
-
-            async function assignTicket() {
-                const technicianName = document.getElementById('technician-name').value;
-                if (!technicianName) {
-                    alert('Please enter technician name');
-                    return;
-                }
-                if (!currentTicketId) {
-                    console.error('No currentTicketId in assignTicket');
-                    alert('Error: No ticket selected');
-                    return;
-                }
-                console.log('Assigning ticket:', { ticketId: currentTicketId, technicianName });
-                try {
-                    const response = await fetch(`/api/tickets/${currentTicketId}/assign`, {
-                        method: 'PUT',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${accessToken}`
-                        },
-                        body: JSON.stringify({ assigned_to: technicianName, status: 'Ongoing', assigned_at: new Date().toISOString() })
-                    });
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`HTTP ${response.status}: ${errorText}`);
-                    }
-                    closeModal('assign-ticket-modal');
-                    if (currentLine) loadLineTickets(currentLine);
-                    loadAllTickets();
-                    loadDashboard();
-                    alert('Ticket assigned successfully');
-                } catch (error) {
-                    console.error('Error assigning ticket:', error);
-                    alert(`Failed to assign ticket: ${error.message}`);
-                }
-            }
-
-            async function resolveTicket() {
-                const issue = document.getElementById('issue').value;
-                const fix = document.getElementById('fix').value;
-                if (!issue || !fix) {
-                    alert('Please fill in issue and fix');
-                    return;
-                }
-                if (!currentTicketId) {
-                    console.error('No currentTicketId in resolveTicket');
-                    alert('Error: No ticket selected');
-                    return;
-                }
-                try {
-                    const ticketResponse = await fetch(`/api/tickets/${currentTicketId}`);
-                    if (!ticketResponse.ok) throw new Error(`HTTP ${ticketResponse.status}`);
-                    const ticket = await ticketResponse.json();
-                    const resolvedBy = ticket.assigned_to || 'Unknown';
-                    console.log('Resolving ticket:', { ticketId: currentTicketId, issue, fix, resolvedBy });
-                    const response = await fetch(`/api/tickets/${currentTicketId}/resolve`, {
-                        method: 'PUT',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${accessToken}`
-                        },
-                        body: JSON.stringify({ issue, fix, status: 'Closed', resolved_by: resolvedBy, resolved_at: new Date().toISOString() })
-                    });
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`HTTP ${response.status}: ${errorText}`);
-                    }
-                    closeModal('resolve-ticket-modal');
-                    if (currentLine) loadLineTickets(currentLine);
-                    loadAllTickets();
-                    loadDashboard();
-                    alert('Ticket resolved successfully');
-                } catch (error) {
-                    console.error('Error resolving ticket:', error);
-                    alert(`Failed to resolve ticket: ${error.message}`);
-                }
-            }
-
-            async function loadAnalytics() {
-                try {
-                    const line = document.getElementById('analytics-line').value;
-                    const type = document.getElementById('analytics-type').value;
-                    if (!line || !type) return;
-
-                    const response = await fetch(`/api/${type === 'downtime' ? 'downtime-by-process' : 'tickets-by-process'}?line=${line}`);
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    const data = await response.json();
-
-                    const labels = data.map(item => item.process);
-                    const values = data.map(item => type === 'downtime' ? item.downtime : item.count);
-
-                    if (chartInstance) chartInstance.destroy();
-                    const ctx = document.getElementById('analytics-chart').getContext('2d');
-                    chartInstance = new Chart(ctx, {
-                        type: 'bar',
-                        data: {
-                            labels,
-                            datasets: [{
-                                label: type === 'downtime' ? 'Downtime (Minutes)' : 'Open Tickets',
-                                data: values,
-                                backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                                borderColor: 'rgba(75, 192, 192, 1)',
-                                borderWidth: 1
-                            }]
-                        },
-                        options: {
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    title: {
-                                        display: true,
-                                        text: type === 'downtime' ? 'Downtime (Minutes)' : 'Number of Tickets'
-                                    }
-                                },
-                                x: {
-                                    title: {
-                                        display: true,
-                                        text: 'Process'
-                                    }
-                                }
-                            },
-                            plugins: {
-                                legend: { display: true },
-                                title: {
-                                    display: true,
-                                    text: type === 'downtime' ? `Downtime per Process for ${line}` : `Open Tickets per Process for ${line}`
-                                }
-                            }
-                        }
-                    });
-                } catch (error) {
-                    console.error('Error loading analytics:', error);
-                    alert(`Failed to load analytics: ${error.message}`);
-                }
-            }
-
-            // Initialize app
-            async function init() {
-    if (accessToken) {
-        try {
-            const response = await fetch('/api/user', {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            if (response.ok) {
-                const { role } = await response.json();
-                currentUser = { role };
-            }
-        } catch (error) {
-            console.error('Error initializing:', error);
+            updateUIForRole();
+            showScreen('dashboard');
+            updateDashboard();
+            setInterval(checkAlarms, 30000);
         }
-    }
-    updateUIForRole();
-    showScreen('dashboard');
-}
 
-            init();
-        </script>
-    </body>
+        function showModal(modalId) {
+            console.log('showModal called with:', modalId);
+            document.getElementById(modalId).classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        function showScreen(screenId) {
+            document.querySelectorAll('.container').forEach(container => container.classList.add('hidden'));
+            document.getElementById(screenId).classList.remove('hidden');
+            if (screenId === 'dashboard') updateDashboard();
+            if (screenId === 'all-tickets') updateTicketsTable();
+            if (screenId === 'submit-ticket') updateOperationOptions();
+            if (screenId === 'analytics') updateAnalytics();
+        }
+
+        function updateUIForRole() {
+            if (!currentUser) {
+                showModal('login-modal');
+                document.getElementById('manager-controls').classList.add('hidden');
+            } else {
+                closeModal('login-modal');
+                document.getElementById('manager-controls').classList.toggle('hidden', currentUser.role !== 'Manager');
+            }
+        }
+
+        async function login() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            if (!email || !password) {
+                alert('Please enter email and password');
+                return;
+            }
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const { access_token, role } = await response.json();
+                accessToken = access_token;
+                localStorage.setItem('accessToken', accessToken);
+                currentUser = { role };
+                updateUIForRole();
+                closeModal('login-modal');
+                showScreen('dashboard');
+            } catch (error) {
+                console.error('Error logging in:', error);
+                alert(`Failed to login: ${error.message}`);
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch('/api/logout', { method: 'POST' });
+                accessToken = null;
+                localStorage.removeItem('accessToken');
+                currentUser = null;
+                updateUIForRole();
+            } catch (error) {
+                console.error('Error logging out:', error);
+            }
+        }
+
+        async function updateDashboard() {
+            try {
+                const ticketsResponse = await fetch('/api/tickets?status=Open,Ongoing', {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const tickets = await ticketsResponse.json();
+                const lines = ['MRR', 'FCM', 'IAMM'];
+                lines.forEach(line => {
+                    const open = tickets.filter(t => t.line === line && t.status === 'Open').length;
+                    const ongoing = tickets.filter(t => t.line === line && t.status === 'Ongoing').length;
+                    const div = document.getElementById(line);
+                    div.className = `p-4 border rounded ${open > 0 ? 'bg-red-200' : ongoing > 0 ? 'bg-yellow-200' : 'bg-green-200'}`;
+                    document.getElementById(`${line}-tickets`).textContent = `${open} open, ${ongoing} ongoing`;
+                });
+
+                const statsResponse = await fetch('/api/ticket-stats', {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const stats = await statsResponse.json();
+                document.getElementById('tickets-today').textContent = `Tickets generated today: ${stats.today}`;
+
+                const downtimeResponse = await fetch('/api/downtime', {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const downtime = await downtimeResponse.json();
+                const tbody = document.getElementById('downtime-table');
+                tbody.innerHTML = '';
+                downtime.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td class="border p-2">${item.line}</td><td class="border p-2">${item.downtime}</td>`;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error('Error updating dashboard:', error);
+            }
+        }
+
+        function updateOperationOptions() {
+            const line = document.getElementById('line').value;
+            const operationSelect = document.getElementById('operation');
+            operationSelect.innerHTML = '<option value="">Select Operation</option>';
+            if (line && processes[line]) {
+                processes[line].forEach(process => {
+                    const option = document.createElement('option');
+                    option.value = process;
+                    option.textContent = process;
+                    operationSelect.appendChild(option);
+                });
+            }
+        }
+
+        async function submitTicket() {
+            const employeeId = document.getElementById('employee-id').value;
+            const name = document.getElementById('name').value;
+            const line = document.getElementById('line').value;
+            const process = document.getElementById('operation').value;
+            const description = document.getElementById('description').value;
+
+            if (!employeeId || !name || !line || !process || !description) {
+                alert('Please enter all fields');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/tickets', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({ employee_id: employeeId, name, line, process, description, status: 'Open' })
+                });
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                document.getElementById('employee-id').value = '';
+                document.getElementById('name').value = '';
+                document.getElementById('line').value = '';
+                document.getElementById('operation').innerHTML = '<option value="">Select Operation</option>';
+                document.getElementById('description').value = '';
+                alert('Ticket submitted successfully');
+                showScreen('dashboard');
+            } catch (error) {
+                console.error('Error submitting ticket:', error);
+                alert(`Failed to submit ticket: ${error.message}`);
+            }
+        }
+
+        async function updateTicketsTable() {
+            const filter = document.getElementById('ticket-filter').value;
+            let url = '/api/tickets';
+            if (filter) url += `?status=${filter}`;
+            try {
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const tickets = await response.json();
+                const tbody = document.getElementById('tickets-table');
+                tbody.innerHTML = '';
+                tickets.forEach(ticket => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="border p-2">${ticket.ticket_id}</td>
+                        <td class="border p-2">${ticket.line}</td>
+                        <td class="border p-2">${ticket.process}</td>
+                        <td class="border p-2">${ticket.description}</td>
+                        <td class="border p-2">${ticket.status}</td>
+                        <td class="border p-2">
+                            ${currentUser?.role === 'Manager' && ticket.status === 'Open' ? `<button onclick="assignTicket('${ticket.ticket_id}')" class="bg-blue-500 text-white px-2 py-1 rounded">Assign</button>` : ''}
+                            ${currentUser?.role === 'Manager' && ticket.status === 'Ongoing' ? `<button onclick="resolveTicket('${ticket.ticket_id}')" class="bg-green-500 text-white px-2 py-1 rounded">Resolve</button>` : ''}
+                        </td>`;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error('Error updating tickets:', error);
+            }
+        }
+
+        async function filterTickets() {
+            updateTicketsTable();
+        }
+
+        async function assignTicket(ticketId) {
+            const assignedTo = prompt('Enter assignee email:');
+            if (!assignedTo) return;
+            try {
+                const response = await fetch(`/api/tickets/${ticketId}/assign`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({ assigned_to: assignedTo, status: 'Ongoing', assigned_at: new Date().toISOString() })
+                });
+                if (!response.ok) throw new Error('Failed to assign ticket');
+                updateTicketsTable();
+            } catch (error) {
+                console.error('Error assigning ticket:', error);
+                alert('Failed to assign ticket');
+            }
+        }
+
+        async function resolveTicket(ticketId) {
+            const issue = prompt('Enter issue:');
+            const fix = prompt('Enter fix:');
+            if (!issue || !fix) return;
+            try {
+                const response = await fetch(`/api/tickets/${ticketId}/resolve`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({ issue, fix, status: 'Closed', resolved_by: currentUser.email, resolved_at: new Date().toISOString() })
+                });
+                if (!response.ok) throw new Error('Failed to resolve ticket');
+                updateTicketsTable();
+            } catch (error) {
+                console.error('Error resolving ticket:', error);
+                alert('Failed to resolve ticket');
+            }
+        }
+
+        async function checkAlarms() {
+            try {
+                const response = await fetch('/api/tickets?status=Open', {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (!response.ok) throw new Error('Failed to fetch tickets');
+                const tickets = await response.json();
+                const now = new Date();
+                let alarmTriggered = false;
+                tickets.forEach(ticket => {
+                    const createdAt = new Date(ticket.created_at);
+                    if ((now - createdAt) / (1000 * 60) > 3) {
+                        alarmTriggered = true;
+                    }
+                });
+                if (alarmTriggered && audio.paused && !isTestAlarmPlaying) {
+                    audio.loop = true;
+                    audio.play().catch(error => console.error('Audio play error:', error));
+                } else if (!alarmTriggered && !audio.paused && !isTestAlarmPlaying) {
+                    audio.pause();
+                    audio.currentTime = 0;
+                }
+            } catch (error) {
+                console.error('Error checking alarms:', error);
+            }
+        }
+
+        function testAlarm() {
+            if (isTestAlarmPlaying) {
+                audio.pause();
+                audio.currentTime = 0;
+                isTestAlarmPlaying = false;
+                document.getElementById('test-alarm').textContent = 'Test Alarm';
+            } else {
+                audio.loop = true;
+                audio.play().catch(error => console.error('Audio play error:', error));
+                isTestAlarmPlaying = true;
+                document.getElementById('test-alarm').textContent = 'Stop Alarm';
+            }
+        }
+
+        async function updateAnalytics() {
+            const line = document.getElementById('analytics-line').value;
+            const type = document.getElementById('analytics-type').value;
+            const fromDate = document.getElementById('from-date').value;
+            const toDate = document.getElementById('to-date').value;
+            let url = type === 'downtime' ? '/api/downtime' : '/api/tickets-by-process';
+            if (line || fromDate || toDate) {
+                url += '?';
+                if (line) url += `line=${line}&`;
+                if (fromDate) url += `from=${fromDate}&`;
+                if (toDate) url += `to=${toDate}&`;
+                url = url.slice(0, -1);
+            }
+            try {
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                let data = await response.json();
+                console.log('Analytics data:', data); // Debug
+                if (type === 'tickets-by-process') {
+                    data = data.sort((a, b) => b.count - a.count || a.process.localeCompare(b.process));
+                }
+                updateAnalyticsChart(data, type);
+                updateTechnicianTable();
+            } catch (error) {
+                console.error('Error updating analytics:', error);
+            }
+        }
+
+        function updateAnalyticsChart(data, type) {
+            const ctx = document.getElementById('analytics-chart').getContext('2d');
+            if (window.analyticsChart) window.analyticsChart.destroy();
+            window.analyticsChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.length ? data.map(item => item.line || item.process) : ['No Data'],
+                    datasets: [{
+                        label: type === 'downtime' ? 'Downtime (minutes)' : 'Created Tickets',
+                        data: data.length ? data.map(item => item.downtime || item.count) : [0],
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        async function updateTechnicianTable() {
+            const line = document.getElementById('analytics-line').value;
+            const fromDate = document.getElementById('from-date').value;
+            const toDate = document.getElementById('to-date').value;
+            let url = '/api/technician-stats';
+            if (line || fromDate || toDate) {
+                url += '?';
+                if (line) url += `line=${line}&`;
+                if (fromDate) url += `from=${fromDate}&`;
+                if (toDate) url += `to=${toDate}&`;
+                url = url.slice(0, -1);
+            }
+            try {
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                console.log('Technician data:', data); // Debug
+                const tbody = document.getElementById('technician-table');
+                tbody.innerHTML = '';
+                data.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="border p-2">${item.technician || 'Unassigned'}</td>
+                        <td class="border p-2">${item.tickets_resolved}</td>
+                        <td class="border p-2">${Math.round(item.total_resolve_time)}</td>
+                        <td class="border p-2">${Math.round(item.total_downtime)}</td>`;
+                    tbody.appendChild(tr);
+                });
+                if (!data.length) {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td class="border p-2" colspan="4">No technician data available</td>`;
+                    tbody.appendChild(tr);
+                }
+            } catch (error) {
+                console.error('Error updating technician table:', error);
+            }
+        }
+
+        init();
+    </script>
+</body>
 </html>

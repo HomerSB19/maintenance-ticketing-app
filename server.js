@@ -186,14 +186,17 @@ app.get('/api/ticket-stats', async (req, res) => {
 
 app.get('/api/downtime', async (req, res) => {
     try {
-        const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 0, 0);
-        const { data, error } = await supabase
+        const { line, from, to } = req.query;
+        let query = supabase
             .from('tickets')
             .select('line, created_at, resolved_at')
-            .in('status', ['Open', 'Ongoing', 'Closed'])
-            .gte('created_at', todayStart.toISOString());
+            .in('status', ['Open', 'Ongoing', 'Closed']);
+        if (line) query = query.eq('line', line);
+        if (from) query = query.gte('created_at', new Date(from).toISOString());
+        if (to) query = query.lte('created_at', new Date(to).toISOString());
+        const { data, error } = await query;
         if (error) throw error;
+        const now = new Date();
         const downtime = {};
         data.forEach(ticket => {
             const created = new Date(ticket.created_at);
@@ -211,9 +214,11 @@ app.get('/api/downtime', async (req, res) => {
 
 app.get('/api/downtime-by-process', async (req, res) => {
     try {
-        const { line } = req.query;
+        const { line, from, to } = req.query;
         let query = supabase.from('tickets').select('process, created_at, resolved_at').in('status', ['Open', 'Ongoing', 'Closed']);
         if (line) query = query.eq('line', line);
+        if (from) query = query.gte('created_at', new Date(from).toISOString());
+        if (to) query = query.lte('created_at', new Date(to).toISOString());
         const { data, error } = await query;
         if (error) throw error;
         const now = new Date();
@@ -234,9 +239,11 @@ app.get('/api/downtime-by-process', async (req, res) => {
 
 app.get('/api/tickets-by-process', async (req, res) => {
     try {
-        const { line } = req.query;
-        let query = supabase.from('tickets').select('process').eq('status', 'Open');
+        const { line, from, to } = req.query;
+        let query = supabase.from('tickets').select('process');
         if (line) query = query.eq('line', line);
+        if (from) query = query.gte('created_at', new Date(from).toISOString());
+        if (to) query = query.lte('created_at', new Date(to).toISOString());
         const { data, error } = await query;
         if (error) throw error;
         const counts = {};
@@ -247,6 +254,51 @@ app.get('/api/tickets-by-process', async (req, res) => {
         res.json(result);
     } catch (error) {
         console.error('Error fetching tickets by process:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/technician-stats', async (req, res) => {
+    try {
+        const { line, from, to } = req.query;
+        let query = supabase
+            .from('tickets')
+            .select('resolved_by, assigned_to, created_at, assigned_at, resolved_at, status');
+        if (line) query = query.eq('line', line);
+        if (from) query = query.gte('created_at', new Date(from).toISOString());
+        if (to) query = query.lte('created_at', new Date(to).toISOString());
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const stats = {};
+        const now = new Date();
+        data.forEach(ticket => {
+            const technician = ticket.resolved_by || ticket.assigned_to || 'Unassigned';
+            if (!stats[technician]) {
+                stats[technician] = { tickets_resolved: 0, total_resolve_time: 0, total_downtime: 0 };
+            }
+            if (ticket.status === 'Closed' && ticket.resolved_by) {
+                stats[technician].tickets_resolved += 1;
+                if (ticket.assigned_at && ticket.resolved_at) {
+                    const resolveTime = (new Date(ticket.resolved_at) - new Date(ticket.assigned_at)) / (1000 * 60);
+                    stats[technician].total_resolve_time += resolveTime;
+                }
+            }
+            if (ticket.assigned_to) {
+                const downtime = (ticket.resolved_at ? new Date(ticket.resolved_at) : now) - new Date(ticket.created_at);
+                stats[technician].total_downtime += downtime / (1000 * 60);
+            }
+        });
+
+        const result = Object.keys(stats).map(technician => ({
+            technician,
+            tickets_resolved: stats[technician].tickets_resolved,
+            total_resolve_time: stats[technician].total_resolve_time,
+            total_downtime: stats[technician].total_downtime
+        }));
+        res.json(result);
+    } catch (error) {
+        console.error('Error fetching technician stats:', error);
         res.status(500).json({ error: error.message });
     }
 });
