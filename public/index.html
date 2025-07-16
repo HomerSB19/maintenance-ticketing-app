@@ -572,12 +572,16 @@
                 }
                 try {
                     console.log('checkForAlarms: Fetching tickets');
-                    const response = await fetch('/api/tickets?status=Open', {
+                    const response = await fetch(`/api/tickets?t=${Date.now()}`, {
                         headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     const tickets = await response.json();
                     console.log('checkForAlarms: Tickets received', tickets);
+
+                    // Filter for Open tickets client-side
+                    const openTickets = tickets.filter(t => t.status === 'Open');
+                    console.log('checkForAlarms: Open tickets', openTickets);
 
                     // Create a hash of ticket data (ticket_id, created_at, status)
                     const ticketHash = tickets
@@ -589,8 +593,8 @@
 
                     const now = new Date();
                     const threeMinutesAgo = new Date(now.getTime() - 3 * 60 * 1000);
-                    const overdueTickets = tickets.filter(ticket => new Date(ticket.created_at) < threeMinutesAgo);
-                    console.log('checkForAlarms: Overdue tickets', overdueTickets.length);
+                    const overdueTickets = openTickets.filter(ticket => new Date(ticket.created_at) < threeMinutesAgo);
+                    console.log('checkForAlarms: Overdue tickets', overdueTickets.length, overdueTickets);
 
                     if (overdueTickets.length > 0 && !isTestAlarmPlaying) {
                         console.log('checkForAlarms: Starting alarm for overdue tickets');
@@ -617,58 +621,66 @@
                 }
                 try {
                     console.log('loadDashboard: Fetching ticket data');
-                    const ticketResponse = await fetch('/api/tickets', {
+                    const ticketResponse = await fetch(`/api/tickets?t=${Date.now()}`, {
                         headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
                     if (!ticketResponse.ok) throw new Error(`HTTP ${ticketResponse.status}`);
                     const tickets = await ticketResponse.json();
                     console.log('loadDashboard: Tickets received', tickets);
 
-                    const statsResponse = await fetch('/api/ticket-stats', {
+                    const statsResponse = await fetch(`/api/ticket-stats?t=${Date.now()}`, {
                         headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
                     if (!statsResponse.ok) throw new Error(`HTTP ${statsResponse.status}`);
                     const stats = await statsResponse.json();
                     console.log('loadDashboard: Stats received', stats);
 
-                    const downtimeResponse = await fetch('/api/downtime', {
+                    const downtimeResponse = await fetch(`/api/downtime?t=${Date.now()}`, {
                         headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
                     if (!downtimeResponse.ok) throw new Error(`HTTP ${downtimeResponse.status}`);
                     const downtimeData = await downtimeResponse.json();
                     console.log('loadDashboard: Downtime data received', downtimeData);
 
-                    const lines = ['MRR', 'FCM', 'IDB', 'MGH', 'PPK', 'IAMM'];
-                    lines.forEach(line => {
-                        const openTickets = tickets.filter(t => t.line === line && t.status === 'Open').length;
-                        const ongoingTickets = tickets.filter(t => t.line === line && t.status === 'Ongoing').length;
-                        const box = document.getElementById(`${line.toLowerCase()}-box`);
-                        box.classList.remove('flash-red', 'flash-yellow', 'bg-green-200');
-                        if (openTickets > 0) {
-                            box.classList.add('flash-red');
-                        } else if (ongoingTickets > 0) {
-                            box.classList.add('flash-yellow');
-                        } else {
-                            box.classList.add('bg-green-200');
-                        }
-                        document.getElementById(`${line.toLowerCase()}-open`).textContent = openTickets;
-                        document.getElementById(`${line.toLowerCase()}-ongoing`).textContent = ongoingTickets;
-                    });
+                    // Only update UI if dashboard is visible
+                    if (!document.getElementById('dashboard').classList.contains('hidden')) {
+                        console.log('loadDashboard: Updating UI');
+                        const lines = ['MRR', 'FCM', 'IDB', 'MGH', 'PPK', 'IAMM'];
+                        lines.forEach(line => {
+                            const openTickets = tickets.filter(t => t.line === line && t.status === 'Open').length;
+                            const ongoingTickets = tickets.filter(t => t.line === line && t.status === 'Ongoing').length;
+                            const box = document.getElementById(`${line.toLowerCase()}-box`);
+                            box.classList.remove('flash-red', 'flash-yellow', 'bg-green-200');
+                            if (openTickets > 0) {
+                                box.classList.add('flash-red');
+                            } else if (ongoingTickets > 0) {
+                                box.classList.add('flash-yellow');
+                            } else {
+                                box.classList.add('bg-green-200');
+                            }
+                            document.getElementById(`${line.toLowerCase()}-open`).textContent = openTickets;
+                            document.getElementById(`${line.toLowerCase()}-ongoing`).textContent = ongoingTickets;
+                            console.log(`loadDashboard: Updated ${line} - Open: ${openTickets}, Ongoing: ${ongoingTickets}`);
+                        });
 
-                    document.getElementById('tickets-today').textContent = stats.today;
-                    document.getElementById('tickets-week').textContent = stats.week;
+                        document.getElementById('tickets-today').textContent = stats.today;
+                        document.getElementById('tickets-week').textContent = stats.week;
 
-                    const downtimeTable = document.getElementById('downtime-table');
-                    downtimeTable.innerHTML = '';
-                    downtimeData.forEach(({ line, downtime }) => {
-                        const row = document.createElement('tr');
-                        row.className = 'hover:bg-gray-50';
-                        row.innerHTML = `
-                            <td class="p-2">${line}</td>
-                            <td class="p-2">${downtime}</td>
-                        `;
-                        downtimeTable.appendChild(row);
-                    });
+                        const downtimeTable = document.getElementById('downtime-table');
+                        downtimeTable.innerHTML = '';
+                        downtimeData.forEach(({ line, downtime }) => {
+                            const row = document.createElement('tr');
+                            row.className = 'hover:bg-gray-50';
+                            row.innerHTML = `
+                                <td class="p-2">${line}</td>
+                                <td class="p-2">${downtime}</td>
+                            `;
+                            downtimeTable.appendChild(row);
+                        });
+                        console.log('loadDashboard: UI update complete');
+                    } else {
+                        console.log('loadDashboard: Dashboard not visible, skipping UI update');
+                    }
                 } catch (error) {
                     console.error('loadDashboard: Error', error);
                     alert(`Failed to load dashboard: ${error.message}`);
@@ -678,7 +690,7 @@
             async function loadAllTickets() {
                 try {
                     const filterStatus = document.getElementById('filter-status').value;
-                    const response = await fetch('/api/tickets' + (filterStatus ? `?status=${filterStatus}` : ''), {
+                    const response = await fetch(`/api/tickets${filterStatus ? `?status=${filterStatus}` : ''}&t=${Date.now()}`, {
                         headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -707,7 +719,7 @@
 
             async function loadTicketDetails(ticketId) {
                 try {
-                    const response = await fetch(`/api/tickets/${ticketId}`, {
+                    const response = await fetch(`/api/tickets/${ticketId}?t=${Date.now()}`, {
                         headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -737,7 +749,7 @@
             async function loadLineTickets(line) {
                 console.log('loadLineTickets called with:', { line });
                 try {
-                    const response = await fetch(`/api/tickets?status=Open,Ongoing`, {
+                    const response = await fetch(`/api/tickets?status=Open,Ongoing&t=${Date.now()}`, {
                         headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -862,7 +874,7 @@
                     return;
                 }
                 try {
-                    const ticketResponse = await fetch(`/api/tickets/${currentTicketId}`, {
+                    const ticketResponse = await fetch(`/api/tickets/${currentTicketId}?t=${Date.now()}`, {
                         headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
                     if (!ticketResponse.ok) throw new Error(`HTTP ${ticketResponse.status}`);
@@ -900,7 +912,7 @@
                     const toDate = document.getElementById('to-date').value;
                     if (!line || !type) return;
 
-                    let url = `/api/${type === 'downtime' ? 'downtime-by-process' : 'tickets-by-process'}?line=${line}`;
+                    let url = `/api/${type === 'downtime' ? 'downtime-by-process' : 'tickets-by-process'}?line=${line}&t=${Date.now()}`;
                     if (fromDate) url += `&from=${fromDate}`;
                     if (toDate) url += `&to=${toDate}`;
                     const response = await fetch(url, {
@@ -970,9 +982,9 @@
                     const line = document.getElementById('analytics-line').value;
                     const fromDate = document.getElementById('from-date').value;
                     const toDate = document.getElementById('to-date').value;
-                    let url = '/api/technician-stats';
+                    let url = `/api/technician-stats?t=${Date.now()}`;
                     if (line || fromDate || toDate) {
-                        url += '?';
+                        url += url.includes('?') ? '&' : '?';
                         if (line) url += `line=${line}&`;
                         if (fromDate) url += `from=${fromDate}&`;
                         if (toDate) url += `to=${toDate}&`;
@@ -1011,7 +1023,7 @@
             async function init() {
                 try {
                     if (accessToken) {
-                        const response = await fetch('/api/user', {
+                        const response = await fetch(`/api/user?t=${Date.now()}`, {
                             headers: { 'Authorization': `Bearer ${accessToken}` }
                         });
                         if (response.ok) {
