@@ -857,22 +857,22 @@
 
             // Initialize app
             async function init() {
-                try {
-                    const response = await fetch('/api/user', {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    });
-                    if (response.ok) {
-                        const { role } = await response.json();
-                        currentUser = { role };
-                    }
-                    updateUIForRole();
-                    showScreen('dashboard');
-                } catch (error) {
-                    console.error('Error initializing:', error);
-                    updateUIForRole();
-                    showScreen('dashboard');
-                }
+    if (accessToken) {
+        try {
+            const response = await fetch('/api/user', {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            if (response.ok) {
+                const { role } = await response.json();
+                currentUser = { role };
             }
+        } catch (error) {
+            console.error('Error initializing:', error);
+        }
+    }
+    updateUIForRole();
+    showScreen('dashboard');
+}
 
             init();
         </script>
