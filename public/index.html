@@ -42,7 +42,6 @@
             <button id="all-tickets-btn" onclick="showScreen('all-tickets')" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm hidden">All Tickets</button>
             <button id="analytics-btn" onclick="showScreen('analytics')" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm hidden">Analytics</button>
             <button id="test-alarm-btn" onclick="testAlarm()" class="hidden px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm">Test Alarm</button>
-            <button id="refresh-btn" onclick="refreshDashboard()" class="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm hidden">Refresh Dashboard</button>
         </div>
         <div id="submit-ticket" class="screen hidden">
             <h2 class="text-xl font-semibold text-gray-800 mb-4">Submit a New Ticket</h2>
@@ -398,11 +397,6 @@
                 if (screenId === 'analytics') loadAnalytics();
             }
 
-            function refreshDashboard() {
-                console.log('refreshDashboard: Forcing dashboard refresh');
-                fetchTicketData().then(() => loadDashboard());
-            }
-
             function showModal(modalId, ticketId = null, line = null) {
                 console.log('showModal called with:', { modalId, ticketId, line });
                 currentTicketId = ticketId;
@@ -492,7 +486,6 @@
                 const allTicketsBtn = document.getElementById('all-tickets-btn');
                 const analyticsBtn = document.getElementById('analytics-btn');
                 const testAlarmBtn = document.getElementById('test-alarm-btn');
-                const refreshBtn = document.getElementById('refresh-btn');
                 const userRole = document.getElementById('user-role');
 
                 if (!currentUser) {
@@ -503,7 +496,6 @@
                     allTicketsBtn.classList.add('hidden');
                     analyticsBtn.classList.add('hidden');
                     testAlarmBtn.classList.add('hidden');
-                    refreshBtn.classList.add('hidden');
                     userRole.textContent = 'Not logged in';
                     return;
                 }
@@ -515,7 +507,6 @@
                 dashboardBtn.classList.remove('hidden');
                 allTicketsBtn.classList.remove('hidden');
                 analyticsBtn.classList.remove('hidden');
-                refreshBtn.classList.remove('hidden');
                 testAlarmBtn.classList.toggle('hidden', !['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser.role));
             }
 
