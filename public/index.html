@@ -94,23 +94,23 @@
                 </div>
                 <div id="idb-box" class="p-4 rounded-lg shadow-md text-center cursor-pointer" onclick="loadLineTickets('IDB')">
                     <h3 class="text-lg font-bold text-gray-800">IDB</h3>
-                    <p class="text-gray-800 text-sm">Open: <span id="idb-open">0</span></p>
-                    <p class="text-gray-800 text-sm">Ongoing: <span id="idb-ongoing">0</span></p>
+                    <p class="p-2 text-gray-800 text-sm">Open: <span id="idb-open">0</span></p>
+                    <p class="p-2 text-gray-800 text-sm">Ongoing: <span id="idb-ongoing">0</span></p>
                 </div>
                 <div id="mgh-box" class="p-4 rounded-lg shadow-md text-center cursor-pointer" onclick="loadLineTickets('MGH')">
                     <h3 class="text-lg font-bold text-gray-800">MGH</h3>
-                    <p class="text-gray-800 text-sm">Open: <span id="mgh-open">0</span></p>
-                    <p class="text-gray-800 text-sm">Ongoing: <span id="mgh-ongoing">0</span></p>
+                    <p class="p-2 text-gray-800 text-sm">Open: <span id="mgh-open">0</span></p>
+                    <p class="p-2 text-gray-800 text-sm">Ongoing: <span id="mgh-ongoing">0</span></p>
                 </div>
                 <div id="ppk-box" class="p-4 rounded-lg shadow-md text-center cursor-pointer" onclick="loadLineTickets('PPK')">
                     <h3 class="text-lg font-bold text-gray-800">PPK</h3>
-                    <p class="text-gray-800 text-sm">Open: <span id="ppk-open">0</span></p>
-                    <p class="text-gray-800 text-sm">Ongoing: <span id="ppk-ongoing">0</span></p>
+                    <p class="p-2 text-gray-800 text-sm">Open: <span id="ppk-open">0</span></p>
+                    <p class="p-2 text-gray-800 text-sm">Ongoing: <span id="ppk-ongoing">0</span></p>
                 </div>
                 <div id="iamm-box" class="p-4 rounded-lg shadow-md text-center cursor-pointer" onclick="loadLineTickets('IAMM')">
                     <h3 class="text-lg font-bold text-gray-800">IAMM</h3>
-                    <p class="text-gray-800 text-sm">Open: <span id="iamm-open">0</span></p>
-                    <p class="text-gray-800 text-sm">Ongoing: <span id="iamm-ongoing">0</span></p>
+                    <p class="p-2 text-gray-800 text-sm">Open: <span id="iamm-open">0</span></p>
+                    <p class="p-2 text-gray-800 text-sm">Ongoing: <span id="iamm-ongoing">0</span></p>
                 </div>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
@@ -245,7 +245,29 @@
             <div class="modal-content">
                 <h2 class="text-xl font-semibold text-gray-800 mb-4">Assign Ticket</h2>
                 <label for="technician-name" class="block text-gray-700 font-medium text-sm">Technician Name:</label>
-                <input type="text" id="technician-name" class="mt-1 p-2 w-full border rounded focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm" required>
+                <select id="technician-name" class="mt-1 p-2 w-full border rounded focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm" required>
+                    <option value="">Select Technician</option>
+                    <option value="Luis Martinez">Luis Martinez</option>
+                    <option value="Luis Almanza">Luis Almanza</option>
+                    <option value="Jose Olivo">Jose Olivo</option>
+                    <option value="Manuel Linares">Manuel Linares</option>
+                    <option value="Jonathan Oropeza">Jonathan Oropeza</option>
+                    <option value="Angel Velasquez">Angel Velasquez</option>
+                    <option value="Adolfo Hernandez">Adolfo Hernandez</option>
+                    <option value="Pedro Mejia">Pedro Mejia</option>
+                    <option value="Gerardo Martinez">Gerardo Martinez</option>
+                    <option value="Jesus Estrada">Jesus Estrada</option>
+                    <option value="Ramiro Perez">Ramiro Perez</option>
+                    <option value="Brandon Cerecero">Brandon Cerecero</option>
+                    <option value="Jaekyoung Lim">Jaekyoung Lim</option>
+                    <option value="Angel Dario">Angel Dario</option>
+                    <option value="Angel Gustavo">Angel Gustavo</option>
+                    <option value="Daniel Venegas">Daniel Venegas</option>
+                    <option value="David Fernandez">David Fernandez</option>
+                    <option value="Juan Carrillo">Juan Carrillo</option>
+                    <option value="Julio Mojica">Julio Mojica</option>
+                    <option value="Issac Balderas">Issac Balderas</option>
+                </select>
                 <div class="mt-4 flex space-x-2">
                     <button onclick="assignTicket()" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Assign</button>
                     <button onclick="closeModal('assign-ticket-modal')" class="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm">Cancel</button>
@@ -323,6 +345,9 @@
             let isTestAlarmPlaying = false;
             let hasUserInteracted = false;
             let lastTicketHash = null;
+            let cachedTickets = [];
+            let cachedStats = { today: 0, week: 0 };
+            let cachedDowntime = [];
 
             window.addEventListener('load', () => {
                 const overlay = document.createElement('div');
@@ -479,7 +504,7 @@
                 dashboardBtn.classList.remove('hidden');
                 allTicketsBtn.classList.remove('hidden');
                 analyticsBtn.classList.remove('hidden');
-                testAlarmBtn.classList.toggle('hidden', currentUser.role !== 'Manager');
+                testAlarmBtn.classList.toggle('hidden', !['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser.role));
             }
 
             let currentTicketId = null;
@@ -516,7 +541,8 @@
                     document.getElementById('operation').innerHTML = '<option value="">Select Operation</option>';
                     document.getElementById('description').value = '';
                     alert('Ticket submitted successfully');
-                    showScreen('dashboard');
+                    await fetchTicketData(); // Fetch latest data to update cache
+                    showScreen('dashboard'); // Triggers loadDashboard with cached data
                 } catch (error) {
                     console.error('Error submitting ticket:', error);
                     alert(`Failed to submit ticket: ${error.message}`);
@@ -563,22 +589,19 @@
                 }
             }
 
-            async function checkForAlarms() {
+            async function fetchTicketData() {
                 if (!accessToken) {
-                    console.log('checkForAlarms: No access token, skipping');
-                    return;
+                    console.log('fetchTicketData: No access token, skipping');
+                    return false;
                 }
                 try {
-                    console.log('checkForAlarms: Fetching tickets');
-                    const response = await fetch(`/api/tickets?t=${Date.now()}`, {
+                    console.log('fetchTicketData: Fetching tickets');
+                    const ticketResponse = await fetch(`/api/tickets?t=${Date.now()}`, {
                         headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    const tickets = await response.json();
-                    console.log('checkForAlarms: Tickets received', tickets);
-
-                    const openTickets = tickets.filter(t => t.status === 'Open');
-                    console.log('checkForAlarms: Open tickets', openTickets);
+                    if (!ticketResponse.ok) throw new Error(`HTTP ${ticketResponse.status}`);
+                    const tickets = await ticketResponse.json();
+                    console.log('fetchTicketData: Tickets received', tickets);
 
                     const ticketHash = tickets
                         .map(t => `${t.ticket_id}:${t.created_at}:${t.status}`)
@@ -586,6 +609,39 @@
                         .join('|');
                     const hasNewTickets = lastTicketHash !== ticketHash;
                     lastTicketHash = ticketHash;
+
+                    cachedTickets = tickets;
+
+                    const statsResponse = await fetch(`/api/ticket-stats?t=${Date.now()}`, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    if (!statsResponse.ok) throw new Error(`HTTP ${statsResponse.status}`);
+                    cachedStats = await statsResponse.json();
+                    console.log('fetchTicketData: Stats received', cachedStats);
+
+                    const downtimeResponse = await fetch(`/api/downtime?t=${Date.now()}`, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    if (!downtimeResponse.ok) throw new Error(`HTTP ${downtimeResponse.status}`);
+                    cachedDowntime = await downtimeResponse.json();
+                    console.log('fetchTicketData: Downtime data received', cachedDowntime);
+
+                    return hasNewTickets;
+                } catch (error) {
+                    console.error('fetchTicketData: Error', error);
+                    return false;
+                }
+            }
+
+            async function checkForAlarms() {
+                if (!accessToken) {
+                    console.log('checkForAlarms: No access token, skipping');
+                    return;
+                }
+                try {
+                    const hasNewTickets = await fetchTicketData();
+                    const openTickets = cachedTickets.filter(t => t.status === 'Open');
+                    console.log('checkForAlarms: Open tickets', openTickets);
 
                     const now = new Date();
                     const threeMinutesAgo = new Date(now.getTime() - 3 * 60 * 1000);
@@ -600,9 +656,9 @@
                         stopAlarm();
                     }
 
-                    if (hasNewTickets) {
+                    if (hasNewTickets && !document.getElementById('dashboard').classList.contains('hidden')) {
                         console.log('checkForAlarms: New tickets detected, updating dashboard');
-                        await loadDashboard();
+                        loadDashboard();
                     }
                 } catch (error) {
                     console.error('checkForAlarms: Error', error);
@@ -615,66 +671,44 @@
                     return;
                 }
                 try {
-                    console.log('loadDashboard: Fetching ticket data');
-                    const ticketResponse = await fetch(`/api/tickets?t=${Date.now()}`, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    console.log('loadDashboard: Updating UI with cached data');
+                    const tickets = cachedTickets;
+                    const stats = cachedStats;
+                    const downtimeData = cachedDowntime;
+
+                    const lines = ['MRR', 'FCM', 'IDB', 'MGH', 'PPK', 'IAMM'];
+                    lines.forEach(line => {
+                        const openTickets = tickets.filter(t => t.line === line && t.status === 'Open').length;
+                        const ongoingTickets = tickets.filter(t => t.line === line && t.status === 'Ongoing').length;
+                        const box = document.getElementById(`${line.toLowerCase()}-box`);
+                        box.classList.remove('flash-red', 'flash-yellow', 'bg-green-200');
+                        if (openTickets > 0) {
+                            box.classList.add('flash-red');
+                        } else if (ongoingTickets > 0) {
+                            box.classList.add('flash-yellow');
+                        } else {
+                            box.classList.add('bg-green-200');
+                        }
+                        document.getElementById(`${line.toLowerCase()}-open`).textContent = openTickets;
+                        document.getElementById(`${line.toLowerCase()}-ongoing`).textContent = ongoingTickets;
+                        console.log(`loadDashboard: Updated ${line} - Open: ${openTickets}, Ongoing: ${ongoingTickets}`);
                     });
-                    if (!ticketResponse.ok) throw new Error(`HTTP ${ticketResponse.status}`);
-                    const tickets = await ticketResponse.json();
-                    console.log('loadDashboard: Tickets received', tickets);
 
-                    const statsResponse = await fetch(`/api/ticket-stats?t=${Date.now()}`, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    document.getElementById('tickets-today').textContent = stats.today;
+                    document.getElementById('tickets-week').textContent = stats.week;
+
+                    const downtimeTable = document.getElementById('downtime-table');
+                    downtimeTable.innerHTML = '';
+                    downtimeData.forEach(({ line, downtime }) => {
+                        const row = document.createElement('tr');
+                        row.className = 'hover:bg-gray-50';
+                        row.innerHTML = `
+                            <td class="p-2">${line}</td>
+                            <td class="p-2">${downtime}</td>
+                        `;
+                        downtimeTable.appendChild(row);
                     });
-                    if (!statsResponse.ok) throw new Error(`HTTP ${statsResponse.status}`);
-                    const stats = await statsResponse.json();
-                    console.log('loadDashboard: Stats received', stats);
-
-                    const downtimeResponse = await fetch(`/api/downtime?t=${Date.now()}`, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    });
-                    if (!downtimeResponse.ok) throw new Error(`HTTP ${downtimeResponse.status}`);
-                    const downtimeData = await downtimeResponse.json();
-                    console.log('loadDashboard: Downtime data received', downtimeData);
-
-                    if (!document.getElementById('dashboard').classList.contains('hidden')) {
-                        console.log('loadDashboard: Updating UI');
-                        const lines = ['MRR', 'FCM', 'IDB', 'MGH', 'PPK', 'IAMM'];
-                        lines.forEach(line => {
-                            const openTickets = tickets.filter(t => t.line === line && t.status === 'Open').length;
-                            const ongoingTickets = tickets.filter(t => t.line === line && t.status === 'Ongoing').length;
-                            const box = document.getElementById(`${line.toLowerCase()}-box`);
-                            box.classList.remove('flash-red', 'flash-yellow', 'bg-green-200');
-                            if (openTickets > 0) {
-                                box.classList.add('flash-red');
-                            } else if (ongoingTickets > 0) {
-                                box.classList.add('flash-yellow');
-                            } else {
-                                box.classList.add('bg-green-200');
-                            }
-                            document.getElementById(`${line.toLowerCase()}-open`).textContent = openTickets;
-                            document.getElementById(`${line.toLowerCase()}-ongoing`).textContent = ongoingTickets;
-                            console.log(`loadDashboard: Updated ${line} - Open: ${openTickets}, Ongoing: ${ongoingTickets}`);
-                        });
-
-                        document.getElementById('tickets-today').textContent = stats.today;
-                        document.getElementById('tickets-week').textContent = stats.week;
-
-                        const downtimeTable = document.getElementById('downtime-table');
-                        downtimeTable.innerHTML = '';
-                        downtimeData.forEach(({ line, downtime }) => {
-                            const row = document.createElement('tr');
-                            row.className = 'hover:bg-gray-50';
-                            row.innerHTML = `
-                                <td class="p-2">${line}</td>
-                                <td class="p-2">${downtime}</td>
-                            `;
-                            downtimeTable.appendChild(row);
-                        });
-                        console.log('loadDashboard: UI update complete');
-                    } else {
-                        console.log('loadDashboard: Dashboard not visible, skipping UI update');
-                    }
+                    console.log('loadDashboard: UI update complete');
                 } catch (error) {
                     console.error('loadDashboard: Error', error);
                     alert(`Failed to load dashboard: ${error.message}`);
@@ -682,15 +716,25 @@
             }
 
             async function loadAllTickets() {
+                const ticketList = document.getElementById('ticket-list');
+                ticketList.innerHTML = '';
                 try {
                     const filterStatus = document.getElementById('filter-status').value;
-                    const response = await fetch(`/api/tickets${filterStatus ? `?status=${filterStatus}` : ''}&t=${Date.now()}`, {
+                    const url = `/api/tickets${filterStatus ? `?status=${filterStatus}` : ''}&t=${Date.now()}`;
+                    console.log('loadAllTickets: Fetching tickets from', url);
+                    const response = await fetch(url, {
                         headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`HTTP ${response.status}: ${errorText || 'Not Found'}`);
+                    }
                     const tickets = await response.json();
-                    const ticketList = document.getElementById('ticket-list');
-                    ticketList.innerHTML = '';
+                    console.log('loadAllTickets: Tickets received', tickets);
+                    if (tickets.length === 0) {
+                        ticketList.innerHTML = '<tr><td colspan="7" class="p-2 text-gray-600 text-center">No tickets found</td></tr>';
+                        return;
+                    }
                     tickets.forEach(ticket => {
                         const row = document.createElement('tr');
                         row.className = 'hover:bg-gray-50';
@@ -706,7 +750,8 @@
                         ticketList.appendChild(row);
                     });
                 } catch (error) {
-                    console.error('Error loading tickets:', error);
+                    console.error('loadAllTickets: Error', error, { url: `/api/tickets${filterStatus ? `?status=${filterStatus}` : ''}&t=${Date.now()}` });
+                    ticketList.innerHTML = '<tr><td colspan="7" class="p-2 text-red-600 text-center">Failed to load tickets: ' + error.message + '</td></tr>';
                     alert(`Failed to load tickets: ${error.message}`);
                 }
             }
@@ -761,7 +806,7 @@
                             let buttons = `
                                 <button class="details-btn px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm" data-ticket-id="${ticket.ticket_id}">Details</button>
                             `;
-                            if (currentUser?.role === 'Manager') {
+                            if (['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser?.role)) {
                                 if (ticket.status === 'Open') {
                                     buttons += `<button class="assign-btn px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm" data-ticket-id="${ticket.ticket_id}" data-status="Open">Assign</button>`;
                                 } else if (ticket.status === 'Ongoing') {
@@ -785,12 +830,12 @@
                             const ticketId = target.getAttribute('data-ticket-id');
                             console.log('Details button clicked:', { ticketId });
                             showModal('ticket-details-modal', ticketId);
-                        } else if (target.classList.contains('assign-btn') && currentUser?.role === 'Manager') {
+                        } else if (target.classList.contains('assign-btn') && ['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser?.role)) {
                             const ticketId = target.getAttribute('data-ticket-id');
                             const status = target.getAttribute('data-status');
                             console.log('Assign button clicked:', { ticketId, status });
                             handleStatusClick(ticketId, status);
-                        } else if (target.classList.contains('resolve-btn') && currentUser?.role === 'Manager') {
+                        } else if (target.classList.contains('resolve-btn') && ['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser?.role)) {
                             const ticketId = target.getAttribute('data-ticket-id');
                             const status = target.getAttribute('data-status');
                             console.log('Resolve button clicked:', { ticketId, status });
@@ -812,9 +857,9 @@
                 }
                 currentTicketId = ticketId;
                 console.log('Set currentTicketId:', currentTicketId);
-                if (status === 'Open' && currentUser?.role === 'Manager') {
+                if (status === 'Open' && ['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser?.role)) {
                     showModal('assign-ticket-modal', ticketId);
-                } else if (status === 'Ongoing' && currentUser?.role === 'Manager') {
+                } else if (status === 'Ongoing' && ['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser?.role)) {
                     showModal('resolve-ticket-modal', ticketId);
                 }
             }
@@ -822,7 +867,7 @@
             async function assignTicket() {
                 const technicianName = document.getElementById('technician-name').value;
                 if (!technicianName) {
-                    alert('Please enter technician name');
+                    alert('Please select a technician');
                     return;
                 }
                 if (!currentTicketId) {
@@ -847,6 +892,7 @@
                     closeModal('assign-ticket-modal');
                     if (currentLine) loadLineTickets(currentLine);
                     loadAllTickets();
+                    await fetchTicketData();
                     loadDashboard();
                     alert('Ticket assigned successfully');
                 } catch (error) {
@@ -890,6 +936,7 @@
                     closeModal('resolve-ticket-modal');
                     if (currentLine) loadLineTickets(currentLine);
                     loadAllTickets();
+                    await fetchTicketData();
                     loadDashboard();
                     alert('Ticket resolved successfully');
                 } catch (error) {
@@ -916,7 +963,6 @@
                     let data = await response.json();
                     console.log('Analytics data:', data);
 
-                    // Filter out processes with zero values and sort by value (descending)
                     data = data.filter(item => (type === 'downtime' ? item.downtime : item.count) > 0)
                         .sort((a, b) => {
                             const valueA = type === 'downtime' ? a.downtime : a.count;
@@ -1026,6 +1072,7 @@
                         if (response.ok) {
                             const { role, email } = await response.json();
                             currentUser = { role, email };
+                            await fetchTicketData(); // Initialize cached data
                         }
                     }
                     updateUIForRole();
