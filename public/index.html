@@ -42,6 +42,7 @@
             <button id="all-tickets-btn" onclick="showScreen('all-tickets')" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm hidden">All Tickets</button>
             <button id="analytics-btn" onclick="showScreen('analytics')" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm hidden">Analytics</button>
             <button id="test-alarm-btn" onclick="testAlarm()" class="hidden px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm">Test Alarm</button>
+            <button id="refresh-btn" onclick="refreshDashboard()" class="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm hidden">Refresh Dashboard</button>
         </div>
         <div id="submit-ticket" class="screen hidden">
             <h2 class="text-xl font-semibold text-gray-800 mb-4">Submit a New Ticket</h2>
@@ -344,7 +345,6 @@
             let chartInstance = null;
             let isTestAlarmPlaying = false;
             let hasUserInteracted = false;
-            let lastTicketHash = null;
             let cachedTickets = [];
             let cachedStats = { today: 0, week: 0 };
             let cachedDowntime = [];
@@ -391,15 +391,16 @@
                 });
                 document.getElementById(screenId).classList.remove('hidden');
                 if (screenId === 'dashboard') {
-                    if (lastFetchFailed) {
-                        console.log('showScreen: Last fetch failed, forcing data refresh');
-                        fetchTicketData().then(() => loadDashboard());
-                    } else {
-                        loadDashboard();
-                    }
+                    console.log('showScreen: Loading dashboard with fresh data');
+                    fetchTicketData().then(() => loadDashboard());
                 }
                 if (screenId === 'all-tickets') loadAllTickets();
                 if (screenId === 'analytics') loadAnalytics();
+            }
+
+            function refreshDashboard() {
+                console.log('refreshDashboard: Forcing dashboard refresh');
+                fetchTicketData().then(() => loadDashboard());
             }
 
             function showModal(modalId, ticketId = null, line = null) {
@@ -491,6 +492,7 @@
                 const allTicketsBtn = document.getElementById('all-tickets-btn');
                 const analyticsBtn = document.getElementById('analytics-btn');
                 const testAlarmBtn = document.getElementById('test-alarm-btn');
+                const refreshBtn = document.getElementById('refresh-btn');
                 const userRole = document.getElementById('user-role');
 
                 if (!currentUser) {
@@ -501,6 +503,7 @@
                     allTicketsBtn.classList.add('hidden');
                     analyticsBtn.classList.add('hidden');
                     testAlarmBtn.classList.add('hidden');
+                    refreshBtn.classList.add('hidden');
                     userRole.textContent = 'Not logged in';
                     return;
                 }
@@ -512,6 +515,7 @@
                 dashboardBtn.classList.remove('hidden');
                 allTicketsBtn.classList.remove('hidden');
                 analyticsBtn.classList.remove('hidden');
+                refreshBtn.classList.remove('hidden');
                 testAlarmBtn.classList.toggle('hidden', !['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser.role));
             }
 
@@ -601,7 +605,7 @@
                 if (!accessToken) {
                     console.log('fetchTicketData: No access token, skipping');
                     lastFetchFailed = true;
-                    return { hasChanges: false, error: 'No access token' };
+                    return false;
                 }
                 for (let attempt = 1; attempt <= 3; attempt++) {
                     try {
@@ -620,15 +624,6 @@
                         }
                         const tickets = await ticketResponse.json();
                         console.log('fetchTicketData: Tickets received', tickets.length, 'tickets');
-
-                        const ticketHash = tickets
-                            .map(t => `${t.ticket_id}:${t.status}:${t.line}:${t.created_at}:${t.assigned_to || ''}:${t.resolved_at || ''}`)
-                            .sort()
-                            .join('|');
-                        const hasChanges = lastTicketHash !== ticketHash;
-                        lastTicketHash = ticketHash;
-
-                        cachedTickets = tickets;
 
                         console.log('fetchTicketData: Fetching stats');
                         const statsUrl = `/api/ticket-stats?t=${Date.now()}`;
@@ -660,15 +655,16 @@
                         cachedDowntime = await downtimeResponse.json();
                         console.log('fetchTicketData: Downtime received', cachedDowntime);
 
+                        cachedTickets = tickets;
                         lastFetchFailed = false;
-                        console.log('fetchTicketData: Completed', { hasChanges, ticketCount: tickets.length });
-                        return { hasChanges, error: null };
+                        console.log('fetchTicketData: Completed successfully', { ticketCount: tickets.length });
+                        return true;
                     } catch (error) {
                         console.error(`fetchTicketData: Attempt ${attempt} failed`, error);
                         if (attempt === 3) {
                             lastFetchFailed = true;
                             console.error('fetchTicketData: All attempts failed', error);
-                            return { hasChanges: false, error: error.message };
+                            return false;
                         }
                         await new Promise(resolve => setTimeout(resolve, 1000));
                     }
@@ -682,9 +678,9 @@
                     return;
                 }
                 try {
-                    const { hasChanges, error } = await fetchTicketData();
-                    if (error) {
-                        console.error('checkForAlarms: Fetch failed', error);
+                    const success = await fetchTicketData();
+                    if (!success) {
+                        console.error('checkForAlarms: Fetch failed');
                         lastFetchFailed = true;
                         return;
                     }
@@ -705,13 +701,11 @@
                         stopAlarm();
                     }
 
-                    if (hasChanges) {
-                        console.log('checkForAlarms: Ticket changes detected, updating dashboard');
-                        if (!document.getElementById('dashboard').classList.contains('hidden')) {
-                            loadDashboard();
-                        }
+                    if (!document.getElementById('dashboard').classList.contains('hidden')) {
+                        console.log('checkForAlarms: Dashboard is visible, updating');
+                        loadDashboard();
                     } else {
-                        console.log('checkForAlarms: No ticket changes');
+                        console.log('checkForAlarms: Dashboard not visible, skipping update');
                     }
                 } catch (error) {
                     console.error('checkForAlarms: Error', error);
@@ -1166,7 +1160,7 @@
                     showScreen('dashboard');
                     if (!alarmInterval) {
                         console.log('init: Starting polling interval');
-                        alarmInterval = setInterval(checkForAlarms, 5000);
+                        alarmInterval = setInterval(checkForAlarms, 3000);
                     }
                 } catch (error) {
                     console.error('init: Error', error);
