@@ -541,8 +541,8 @@
                     document.getElementById('operation').innerHTML = '<option value="">Select Operation</option>';
                     document.getElementById('description').value = '';
                     alert('Ticket submitted successfully');
-                    await fetchTicketData(); // Fetch latest data to update cache
-                    showScreen('dashboard'); // Triggers loadDashboard with cached data
+                    await fetchTicketData(); // Refresh cache
+                    showScreen('dashboard'); // Update dashboard immediately
                 } catch (error) {
                     console.error('Error submitting ticket:', error);
                     alert(`Failed to submit ticket: ${error.message}`);
@@ -592,44 +592,54 @@
             async function fetchTicketData() {
                 if (!accessToken) {
                     console.log('fetchTicketData: No access token, skipping');
-                    return false;
+                    return { hasChanges: false, error: 'No access token' };
                 }
-                try {
-                    console.log('fetchTicketData: Fetching tickets');
-                    const ticketResponse = await fetch(`/api/tickets?t=${Date.now()}`, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    });
-                    if (!ticketResponse.ok) throw new Error(`HTTP ${ticketResponse.status}`);
-                    const tickets = await ticketResponse.json();
-                    console.log('fetchTicketData: Tickets received', tickets);
+                for (let attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        console.log(`fetchTicketData: Attempt ${attempt} - Fetching tickets`);
+                        const ticketResponse = await fetch(`/api/tickets?t=${Date.now()}`, {
+                            headers: { 'Authorization': `Bearer ${accessToken}` }
+                        });
+                        if (!ticketResponse.ok) throw new Error(`HTTP ${ticketResponse.status}`);
+                        const tickets = await ticketResponse.json();
+                        console.log('fetchTicketData: Tickets received', tickets.length, 'tickets');
 
-                    const ticketHash = tickets
-                        .map(t => `${t.ticket_id}:${t.created_at}:${t.status}`)
-                        .sort()
-                        .join('|');
-                    const hasNewTickets = lastTicketHash !== ticketHash;
-                    lastTicketHash = ticketHash;
+                        // Compute hash including ticket_id, status, and key fields to detect any changes
+                        const ticketHash = tickets
+                            .map(t => `${t.ticket_id}:${t.status}:${t.line}:${t.created_at}:${t.assigned_to || ''}:${t.resolved_at || ''}`)
+                            .sort()
+                            .join('|');
+                        const hasChanges = lastTicketHash !== ticketHash;
+                        lastTicketHash = ticketHash;
 
-                    cachedTickets = tickets;
+                        cachedTickets = tickets;
 
-                    const statsResponse = await fetch(`/api/ticket-stats?t=${Date.now()}`, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    });
-                    if (!statsResponse.ok) throw new Error(`HTTP ${statsResponse.status}`);
-                    cachedStats = await statsResponse.json();
-                    console.log('fetchTicketData: Stats received', cachedStats);
+                        console.log('fetchTicketData: Fetching stats');
+                        const statsResponse = await fetch(`/api/ticket-stats?t=${Date.now()}`, {
+                            headers: { 'Authorization': `Bearer ${accessToken}` }
+                        });
+                        if (!statsResponse.ok) throw new Error(`HTTP ${statsResponse.status}`);
+                        cachedStats = await statsResponse.json();
+                        console.log('fetchTicketData: Stats received', cachedStats);
 
-                    const downtimeResponse = await fetch(`/api/downtime?t=${Date.now()}`, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    });
-                    if (!downtimeResponse.ok) throw new Error(`HTTP ${downtimeResponse.status}`);
-                    cachedDowntime = await downtimeResponse.json();
-                    console.log('fetchTicketData: Downtime data received', cachedDowntime);
+                        console.log('fetchTicketData: Fetching downtime');
+                        const downtimeResponse = await fetch(`/api/downtime?t=${Date.now()}`, {
+                            headers: { 'Authorization': `Bearer ${accessToken}` }
+                        });
+                        if (!downtimeResponse.ok) throw new Error(`HTTP ${downtimeResponse.status}`);
+                        cachedDowntime = await downtimeResponse.json();
+                        console.log('fetchTicketData: Downtime received', cachedDowntime);
 
-                    return hasNewTickets;
-                } catch (error) {
-                    console.error('fetchTicketData: Error', error);
-                    return false;
+                        console.log('fetchTicketData: Completed', { hasChanges, ticketCount: tickets.length });
+                        return { hasChanges, error: null };
+                    } catch (error) {
+                        console.error(`fetchTicketData: Attempt ${attempt} failed`, error);
+                        if (attempt === 3) {
+                            console.error('fetchTicketData: All attempts failed', error);
+                            return { hasChanges: false, error: error.message };
+                        }
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+                    }
                 }
             }
 
@@ -639,14 +649,19 @@
                     return;
                 }
                 try {
-                    const hasNewTickets = await fetchTicketData();
+                    const { hasChanges, error } = await fetchTicketData();
+                    if (error) {
+                        console.error('checkForAlarms: Fetch failed', error);
+                        return;
+                    }
+
                     const openTickets = cachedTickets.filter(t => t.status === 'Open');
-                    console.log('checkForAlarms: Open tickets', openTickets);
+                    console.log('checkForAlarms: Open tickets', openTickets.length);
 
                     const now = new Date();
                     const threeMinutesAgo = new Date(now.getTime() - 3 * 60 * 1000);
                     const overdueTickets = openTickets.filter(ticket => new Date(ticket.created_at) < threeMinutesAgo);
-                    console.log('checkForAlarms: Overdue tickets', overdueTickets.length, overdueTickets);
+                    console.log('checkForAlarms: Overdue tickets', overdueTickets.length);
 
                     if (overdueTickets.length > 0 && !isTestAlarmPlaying) {
                         console.log('checkForAlarms: Starting alarm for overdue tickets');
@@ -656,9 +671,11 @@
                         stopAlarm();
                     }
 
-                    if (hasNewTickets && !document.getElementById('dashboard').classList.contains('hidden')) {
-                        console.log('checkForAlarms: New tickets detected, updating dashboard');
+                    if (hasChanges) {
+                        console.log('checkForAlarms: Ticket changes detected, updating dashboard');
                         loadDashboard();
+                    } else {
+                        console.log('checkForAlarms: No ticket changes');
                     }
                 } catch (error) {
                     console.error('checkForAlarms: Error', error);
@@ -671,7 +688,11 @@
                     return;
                 }
                 try {
-                    console.log('loadDashboard: Updating UI with cached data');
+                    console.log('loadDashboard: Updating UI with cached data', {
+                        ticketCount: cachedTickets.length,
+                        stats: cachedStats,
+                        downtimeLines: cachedDowntime.length
+                    });
                     const tickets = cachedTickets;
                     const stats = cachedStats;
                     const downtimeData = cachedDowntime;
@@ -730,7 +751,7 @@
                         throw new Error(`HTTP ${response.status}: ${errorText || 'Not Found'}`);
                     }
                     const tickets = await response.json();
-                    console.log('loadAllTickets: Tickets received', tickets);
+                    console.log('loadAllTickets: Tickets received', tickets.length);
                     if (tickets.length === 0) {
                         ticketList.innerHTML = '<tr><td colspan="7" class="p-2 text-gray-600 text-center">No tickets found</td></tr>';
                         return;
@@ -750,7 +771,7 @@
                         ticketList.appendChild(row);
                     });
                 } catch (error) {
-                    console.error('loadAllTickets: Error', error, { url: `/api/tickets${filterStatus ? `?status=${filterStatus}` : ''}&t=${Date.now()}` });
+                    console.error('loadAllTickets: Error', error);
                     ticketList.innerHTML = '<tr><td colspan="7" class="p-2 text-red-600 text-center">Failed to load tickets: ' + error.message + '</td></tr>';
                     alert(`Failed to load tickets: ${error.message}`);
                 }
@@ -1072,16 +1093,17 @@
                         if (response.ok) {
                             const { role, email } = await response.json();
                             currentUser = { role, email };
-                            await fetchTicketData(); // Initialize cached data
+                            await fetchTicketData(); // Initialize cache
                         }
                     }
                     updateUIForRole();
                     showScreen('dashboard');
                     if (!alarmInterval) {
+                        console.log('init: Starting polling interval');
                         alarmInterval = setInterval(checkForAlarms, 5000);
                     }
                 } catch (error) {
-                    console.error('Error initializing:', error);
+                    console.error('init: Error', error);
                     updateUIForRole();
                     showScreen('dashboard');
                 }
