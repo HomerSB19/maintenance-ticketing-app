@@ -389,8 +389,9 @@
                     screen.classList.add('hidden');
                 });
                 document.getElementById(screenId).classList.remove('hidden');
+                console.log(`showScreen: Navigating to ${screenId}`);
                 if (screenId === 'dashboard') {
-                    console.log('showScreen: Loading dashboard with fresh data');
+                    console.log('showScreen: Forcing dashboard update');
                     fetchTicketData().then(() => loadDashboard());
                 }
                 if (screenId === 'all-tickets') loadAllTickets();
@@ -442,10 +443,15 @@
                 try {
                     const response = await fetch('/api/login', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0'
+                        },
                         body: JSON.stringify({ email, password })
                     });
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
                     const { access_token, role } = await response.json();
                     accessToken = access_token;
                     localStorage.setItem('accessToken', accessToken);
@@ -463,9 +469,14 @@
                 try {
                     const response = await fetch('/api/logout', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' }
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0'
+                        }
                     });
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
                     accessToken = null;
                     localStorage.removeItem('accessToken');
                     currentUser = null;
@@ -530,7 +541,10 @@
                         method: 'POST',
                         headers: { 
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${accessToken}`
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0'
                         },
                         body: JSON.stringify({ employee_id: employeeId, name, line, process, description, status: 'Open' })
                     });
@@ -545,6 +559,8 @@
                     document.getElementById('description').value = '';
                     alert('Ticket submitted successfully');
                     await fetchTicketData();
+                    console.log('submitTicket: Forcing dashboard update after submission');
+                    loadDashboard();
                     showScreen('dashboard');
                 } catch (error) {
                     console.error('Error submitting ticket:', error);
@@ -601,12 +617,15 @@
                 for (let attempt = 1; attempt <= 3; attempt++) {
                     try {
                         console.log(`fetchTicketData: Attempt ${attempt} - Fetching tickets`);
-                        const ticketUrl = `/api/tickets?t=${Date.now()}`;
+                        const cacheBuster = `cb=${Date.now()}-${Math.random().toString(36).substring(2)}`;
+                        const ticketUrl = `/api/tickets?${cacheBuster}`;
                         console.log('fetchTicketData: Requesting', ticketUrl);
                         const ticketResponse = await fetch(ticketUrl, {
                             headers: { 
                                 'Authorization': `Bearer ${accessToken}`,
-                                'Cache-Control': 'no-cache'
+                                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                                'Pragma': 'no-cache',
+                                'Expires': '0'
                             }
                         });
                         if (!ticketResponse.ok) {
@@ -617,11 +636,13 @@
                         console.log('fetchTicketData: Tickets received', tickets.length, 'tickets');
 
                         console.log('fetchTicketData: Fetching stats');
-                        const statsUrl = `/api/ticket-stats?t=${Date.now()}`;
+                        const statsUrl = `/api/ticket-stats?${cacheBuster}`;
                         const statsResponse = await fetch(statsUrl, {
                             headers: { 
                                 'Authorization': `Bearer ${accessToken}`,
-                                'Cache-Control': 'no-cache'
+                                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                                'Pragma': 'no-cache',
+                                'Expires': '0'
                             }
                         });
                         if (!statsResponse.ok) {
@@ -632,11 +653,13 @@
                         console.log('fetchTicketData: Stats received', cachedStats);
 
                         console.log('fetchTicketData: Fetching downtime');
-                        const downtimeUrl = `/api/downtime?t=${Date.now()}`;
+                        const downtimeUrl = `/api/downtime?${cacheBuster}`;
                         const downtimeResponse = await fetch(downtimeUrl, {
                             headers: { 
                                 'Authorization': `Bearer ${accessToken}`,
-                                'Cache-Control': 'no-cache'
+                                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                                'Pragma': 'no-cache',
+                                'Expires': '0'
                             }
                         });
                         if (!downtimeResponse.ok) {
@@ -655,6 +678,7 @@
                         if (attempt === 3) {
                             lastFetchFailed = true;
                             console.error('fetchTicketData: All attempts failed', error);
+                            alert(`Failed to fetch data after ${attempt} attempts: ${error.message}`);
                             return false;
                         }
                         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -692,15 +716,12 @@
                         stopAlarm();
                     }
 
-                    if (!document.getElementById('dashboard').classList.contains('hidden')) {
-                        console.log('checkForAlarms: Dashboard is visible, updating');
-                        loadDashboard();
-                    } else {
-                        console.log('checkForAlarms: Dashboard not visible, skipping update');
-                    }
+                    console.log('checkForAlarms: Updating dashboard');
+                    loadDashboard();
                 } catch (error) {
                     console.error('checkForAlarms: Error', error);
                     lastFetchFailed = true;
+                    alert(`Error in checkForAlarms: ${error.message}`);
                 }
             }
 
@@ -766,13 +787,15 @@
                     const baseUrl = '/api/tickets';
                     const queryParams = [];
                     if (filterStatus) queryParams.push(`status=${filterStatus}`);
-                    queryParams.push(`t=${Date.now()}`);
+                    queryParams.push(`cb=${Date.now()}-${Math.random().toString(36).substring(2)}`);
                     const url = `${baseUrl}?${queryParams.join('&')}`;
                     console.log('loadAllTickets: Fetching tickets from', url);
                     const response = await fetch(url, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
-                            'Cache-Control': 'no-cache'
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0'
                         }
                     });
                     if (!response.ok) {
@@ -808,13 +831,15 @@
 
             async function loadTicketDetails(ticketId) {
                 try {
-                    const response = await fetch(`/api/tickets/${ticketId}?t=${Date.now()}`, {
+                    const response = await fetch(`/api/tickets/${ticketId}?cb=${Date.now()}-${Math.random().toString(36).substring(2)}`, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
-                            'Cache-Control': 'no-cache'
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0'
                         }
                     });
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
                     const ticket = await response.json();
                     document.getElementById('ticket-details-content').innerHTML = `
                         <p class="mb-2"><strong>Ticket ID:</strong> ${ticket.ticket_id}</p>
@@ -841,13 +866,15 @@
             async function loadLineTickets(line) {
                 console.log('loadLineTickets called with:', { line });
                 try {
-                    const response = await fetch(`/api/tickets?status=Open,Ongoing&t=${Date.now()}`, {
+                    const response = await fetch(`/api/tickets?status=Open,Ongoing&cb=${Date.now()}-${Math.random().toString(36).substring(2)}`, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
-                            'Cache-Control': 'no-cache'
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0'
                         }
                     });
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
                     const tickets = await response.json();
                     const lineTickets = tickets.filter(t => t.line === line && ['Open', 'Ongoing'].includes(t.status));
                     document.getElementById('line-title').textContent = line;
@@ -938,7 +965,9 @@
                         headers: { 
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${accessToken}`,
-                            'Cache-Control': 'no-cache'
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0'
                         },
                         body: JSON.stringify({ assigned_to: technicianName, status: 'Ongoing', assigned_at: new Date().toISOString() })
                     });
@@ -950,6 +979,7 @@
                     if (currentLine) loadLineTickets(currentLine);
                     loadAllTickets();
                     await fetchTicketData();
+                    console.log('assignTicket: Forcing dashboard update after assignment');
                     loadDashboard();
                     alert('Ticket assigned successfully');
                 } catch (error) {
@@ -971,13 +1001,15 @@
                     return;
                 }
                 try {
-                    const ticketResponse = await fetch(`/api/tickets/${currentTicketId}?t=${Date.now()}`, {
+                    const ticketResponse = await fetch(`/api/tickets/${currentTicketId}?cb=${Date.now()}-${Math.random().toString(36).substring(2)}`, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
-                            'Cache-Control': 'no-cache'
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0'
                         }
                     });
-                    if (!ticketResponse.ok) throw new Error(`HTTP ${ticketResponse.status}`);
+                    if (!ticketResponse.ok) throw new Error(`HTTP ${ticketResponse.status}: ${await ticketResponse.text()}`);
                     const ticket = await ticketResponse.json();
                     const resolvedBy = ticket.assigned_to || 'Unknown';
                     console.log('Resolving ticket:', { ticketId: currentTicketId, issue, fix, resolvedBy });
@@ -986,7 +1018,9 @@
                         headers: { 
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${accessToken}`,
-                            'Cache-Control': 'no-cache'
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0'
                         },
                         body: JSON.stringify({ issue, fix, status: 'Closed', resolved_by: resolvedBy, resolved_at: new Date().toISOString() })
                     });
@@ -998,6 +1032,7 @@
                     if (currentLine) loadLineTickets(currentLine);
                     loadAllTickets();
                     await fetchTicketData();
+                    console.log('resolveTicket: Forcing dashboard update after resolution');
                     loadDashboard();
                     alert('Ticket resolved successfully');
                 } catch (error) {
@@ -1015,7 +1050,7 @@
                     if (!line || !type) return;
 
                     const baseUrl = `/api/${type === 'downtime' ? 'downtime-by-process' : 'tickets-by-process'}`;
-                    const queryParams = [`line=${line}`, `t=${Date.now()}`];
+                    const queryParams = [`line=${line}`, `cb=${Date.now()}-${Math.random().toString(36).substring(2)}`];
                     if (fromDate) queryParams.push(`from=${fromDate}`);
                     if (toDate) queryParams.push(`to=${toDate}`);
                     const url = `${baseUrl}?${queryParams.join('&')}`;
@@ -1023,10 +1058,12 @@
                     const response = await fetch(url, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
-                            'Cache-Control': 'no-cache'
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0'
                         }
                     });
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
                     let data = await response.json();
                     console.log('Analytics data:', data);
 
@@ -1094,7 +1131,7 @@
                     const fromDate = document.getElementById('from-date').value;
                     const toDate = document.getElementById('to-date').value;
                     const baseUrl = '/api/technician-stats';
-                    const queryParams = [`t=${Date.now()}`];
+                    const queryParams = [`cb=${Date.now()}-${Math.random().toString(36).substring(2)}`];
                     if (line) queryParams.push(`line=${line}`);
                     if (fromDate) queryParams.push(`from=${fromDate}`);
                     if (toDate) queryParams.push(`to=${toDate}`);
@@ -1103,10 +1140,12 @@
                     const response = await fetch(url, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
-                            'Cache-Control': 'no-cache'
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0'
                         }
                     });
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
                     const data = await response.json();
                     console.log('Technician data:', data);
                     const tbody = document.getElementById('technician-table');
@@ -1135,16 +1174,22 @@
             async function init() {
                 try {
                     if (accessToken) {
-                        const response = await fetch(`/api/user?t=${Date.now()}`, {
+                        const response = await fetch(`/api/user?cb=${Date.now()}-${Math.random().toString(36).substring(2)}`, {
                             headers: { 
                                 'Authorization': `Bearer ${accessToken}`,
-                                'Cache-Control': 'no-cache'
+                                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                                'Pragma': 'no-cache',
+                                'Expires': '0'
                             }
                         });
                         if (response.ok) {
                             const { role, email } = await response.json();
                             currentUser = { role, email };
                             await fetchTicketData();
+                        } else {
+                            console.warn('init: Invalid access token, clearing');
+                            localStorage.removeItem('accessToken');
+                            accessToken = null;
                         }
                     }
                     updateUIForRole();
