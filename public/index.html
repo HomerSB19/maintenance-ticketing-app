@@ -20,7 +20,6 @@
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 50; }
         .modal-content { background: white; margin: 10% auto; padding: 20px; width: 90%; max-width: 500px; border-radius: 0.5rem; max-height: 80vh; overflow-y: auto; }
         .modal-front { z-index: 60; }
-        #error-notification { display: none; position: fixed; top: 10px; right: 10px; background: #ef4444; color: white; padding: 10px; border-radius: 0.5rem; z-index: 100; }
     </style>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -28,7 +27,6 @@
         <source src="/beep-01a.mp3" type="audio/mpeg">
         <source src="https://www.soundjay.com/buttons/beep-01a.mp3" type="audio/mpeg">
     </audio>
-    <div id="error-notification"></div>
     <div class="container mx-auto p-4 max-w-3xl">
         <div id="auth-section" class="mb-4 flex justify-between items-center">
             <h1 class="text-2xl font-bold text-gray-800">Maintenance Ticketing App</h1>
@@ -351,15 +349,6 @@
             let cachedDowntime = [];
             let lastFetchFailed = false;
 
-            function showErrorNotification(message) {
-                const notification = document.getElementById('error-notification');
-                notification.textContent = message;
-                notification.style.display = 'block';
-                setTimeout(() => {
-                    notification.style.display = 'none';
-                }, 5000);
-            }
-
             window.addEventListener('load', () => {
                 const overlay = document.createElement('div');
                 overlay.style.position = 'fixed';
@@ -381,6 +370,58 @@
                 document.body.appendChild(overlay);
             });
 
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible' && accessToken) {
+                    console.log('visibilitychange: Tab visible, forcing data fetch');
+                    fetchTicketData().then(() => loadDashboard());
+                }
+            });
+
+            function getResetTimes() {
+                const now = new Date();
+                const today8AM = new Date(now);
+                today8AM.setHours(8, 0, 0, 0);
+                if (now < today8AM) {
+                    today8AM.setDate(today8AM.getDate() - 1);
+                }
+
+                const monday8AM = new Date(now);
+                monday8AM.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1));
+                monday8AM.setHours(8, 0, 0, 0);
+                if (now < monday8AM) {
+                    monday8AM.setDate(monday8AM.getDate() - 7);
+                }
+
+                return { dailyReset: today8AM.toISOString(), weeklyReset: monday8AM.toISOString(), currentTime: now.toISOString() };
+            }
+
+            function scheduleResets() {
+                const now = new Date();
+                const nextDailyReset = new Date(now);
+                nextDailyReset.setHours(8, 0, 0, 0);
+                if (now >= nextDailyReset) {
+                    nextDailyReset.setDate(nextDailyReset.getDate() + 1);
+                }
+                const timeToDailyReset = nextDailyReset - now;
+                console.log(`[${new Date().toISOString()}] scheduleResets: Scheduling daily reset in ${Math.round(timeToDailyReset / 1000)} seconds`);
+                setTimeout(() => {
+                    console.log(`[${new Date().toISOString()}] scheduleResets: Daily reset triggered`);
+                    fetchTicketData().then(() => loadDashboard());
+                    scheduleResets();
+                }, timeToDailyReset);
+
+                const nextWeeklyReset = new Date(now);
+                nextWeeklyReset.setDate(now.getDate() + (8 - (now.getDay() === 0 ? 7 : now.getDay())));
+                nextWeeklyReset.setHours(8, 0, 0, 0);
+                const timeToWeeklyReset = nextWeeklyReset - now;
+                console.log(`[${new Date().toISOString()}] scheduleResets: Scheduling weekly reset in ${Math.round(timeToWeeklyReset / 1000)} seconds`);
+                setTimeout(() => {
+                    console.log(`[${new Date().toISOString()}] scheduleResets: Weekly reset triggered`);
+                    fetchTicketData().then(() => loadDashboard());
+                    scheduleResets();
+                }, timeToWeeklyReset);
+            }
+
             function updateOperations() {
                 const line = document.getElementById('line').value;
                 const operationSelect = document.getElementById('operation');
@@ -400,20 +441,17 @@
                     screen.classList.add('hidden');
                 });
                 document.getElementById(screenId).classList.remove('hidden');
-                console.log(`showScreen: Navigating to ${screenId}, timestamp: ${new Date().toISOString()}`);
+                console.log(`showScreen: Navigating to ${screenId}`);
                 if (screenId === 'dashboard') {
-                    console.log('showScreen: Forcing immediate dashboard fetch and update');
-                    fetchTicketData().then(success => {
-                        if (success) loadDashboard();
-                        else showErrorNotification('Failed to fetch dashboard data on navigation');
-                    });
+                    console.log('showScreen: Forcing dashboard update');
+                    fetchTicketData().then(() => loadDashboard());
                 }
                 if (screenId === 'all-tickets') loadAllTickets();
                 if (screenId === 'analytics') loadAnalytics();
             }
 
             function showModal(modalId, ticketId = null, line = null) {
-                console.log('showModal called with:', { modalId, ticketId, line, timestamp: new Date().toISOString() });
+                console.log('showModal called with:', { modalId, ticketId, line });
                 currentTicketId = ticketId;
                 currentLine = line;
                 const modal = document.getElementById(modalId);
@@ -424,12 +462,12 @@
                     }
                 } else {
                     console.error(`Modal with ID ${modalId} not found`);
-                    showErrorNotification(`Modal ${modalId} not found`);
+                    alert(`Error: Modal ${modalId} not found`);
                 }
             }
 
             function closeModal(modalId) {
-                console.log('closeModal called with:', { modalId, timestamp: new Date().toISOString() });
+                console.log('closeModal called with:', { modalId });
                 const modal = document.getElementById(modalId);
                 if (modal) {
                     modal.style.display = 'none';
@@ -451,11 +489,10 @@
                 const email = document.getElementById('login-email').value;
                 const password = document.getElementById('login-password').value;
                 if (!email || !password) {
-                    showErrorNotification('Please enter email and password');
+                    alert('Please enter email and password');
                     return;
                 }
                 try {
-                    console.log('login: Attempting login for', email);
                     const response = await fetch('/api/login', {
                         method: 'POST',
                         headers: { 
@@ -471,19 +508,17 @@
                     accessToken = access_token;
                     localStorage.setItem('accessToken', accessToken);
                     currentUser = { role, email };
-                    console.log('login: Success, role:', role);
                     updateUIForRole();
                     closeModal('login-modal');
                     showScreen('dashboard');
                 } catch (error) {
-                    console.error('login: Error', error);
-                    showErrorNotification(`Failed to login: ${error.message}`);
+                    console.error(`[${new Date().toISOString()}] Error logging in:`, error);
+                    alert(`Failed to login: ${error.message}`);
                 }
             }
 
             async function logout() {
                 try {
-                    console.log('logout: Attempting logout');
                     const response = await fetch('/api/logout', {
                         method: 'POST',
                         headers: { 
@@ -497,13 +532,12 @@
                     accessToken = null;
                     localStorage.removeItem('accessToken');
                     currentUser = null;
-                    console.log('logout: Success');
                     updateUIForRole();
                     stopAlarm();
                     showScreen('dashboard');
                 } catch (error) {
-                    console.error('logout: Error', error);
-                    showErrorNotification(`Failed to logout: ${error.message}`);
+                    console.error(`[${new Date().toISOString()}] Error logging out:`, error);
+                    alert(`Failed to logout: ${error.message}`);
                 }
             }
 
@@ -526,7 +560,6 @@
                     analyticsBtn.classList.add('hidden');
                     testAlarmBtn.classList.add('hidden');
                     userRole.textContent = 'Not logged in';
-                    console.log('updateUIForRole: User not logged in');
                     return;
                 }
 
@@ -538,7 +571,6 @@
                 allTicketsBtn.classList.remove('hidden');
                 analyticsBtn.classList.remove('hidden');
                 testAlarmBtn.classList.toggle('hidden', !['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser.role));
-                console.log('updateUIForRole: Updated for role', currentUser.role);
             }
 
             let currentTicketId = null;
@@ -552,12 +584,11 @@
                 const description = document.getElementById('description').value;
 
                 if (!employeeId || !name || !line || !process || !description) {
-                    showErrorNotification('Please fill in all fields');
+                    alert('Please fill in all fields');
                     return;
                 }
 
                 try {
-                    console.log('submitTicket: Submitting ticket', { employeeId, line, process });
                     const response = await fetch('/api/tickets', {
                         method: 'POST',
                         headers: { 
@@ -573,33 +604,31 @@
                         const errorText = await response.text();
                         throw new Error(`HTTP ${response.status}: ${errorText}`);
                     }
-                    const ticket = await response.json();
-                    console.log('submitTicket: Success, ticket_id:', ticket.ticket_id);
                     document.getElementById('employee-id').value = '';
                     document.getElementById('name').value = '';
                     document.getElementById('line').value = '';
                     document.getElementById('operation').innerHTML = '<option value="">Select Operation</option>';
                     document.getElementById('description').value = '';
                     alert('Ticket submitted successfully');
+                    console.log(`[${new Date().toISOString()}] submitTicket: Forcing data fetch and dashboard update`);
                     await fetchTicketData();
-                    console.log('submitTicket: Forcing dashboard update');
                     loadDashboard();
                     showScreen('dashboard');
                 } catch (error) {
-                    console.error('submitTicket: Error', error);
-                    showErrorNotification(`Failed to submit ticket: ${error.message}`);
+                    console.error(`[${new Date().toISOString()}] Error submitting ticket:`, error);
+                    alert(`Failed to submit ticket: ${error.message}`);
                 }
             }
 
             function startAlarm() {
                 if (!hasUserInteracted && !isTestAlarmPlaying) {
-                    console.log('startAlarm: Blocked, no user interaction');
+                    console.log('Alarm blocked: No user interaction');
                     return;
                 }
                 const alarm = document.getElementById('alarm');
                 alarm.play().catch(error => {
-                    console.error('startAlarm: Error playing alarm', error);
-                    showErrorNotification('Failed to play alarm. Ensure /beep-01a.mp3 is accessible.');
+                    console.error(`[${new Date().toISOString()}] Error playing alarm:`, error);
+                    alert('Failed to play alarm. Ensure /beep-01a.mp3 is accessible.');
                 });
             }
 
@@ -612,7 +641,6 @@
                     clearInterval(alarmInterval);
                     alarmInterval = null;
                 }
-                console.log('stopAlarm: Alarm stopped');
             }
 
             function testAlarm() {
@@ -623,29 +651,34 @@
                     testAlarmBtn.textContent = 'Test Alarm';
                 } else {
                     alarm.play().catch(error => {
-                        console.error('testAlarm: Error playing alarm', error);
-                        showErrorNotification('Failed to play alarm. Ensure /beep-01a.mp3 is accessible.');
+                        console.error(`[${new Date().toISOString()}] Error playing test alarm:`, error);
+                        alert('Failed to play alarm. Ensure /beep-01a.mp3 is accessible.');
                     });
                     isTestAlarmPlaying = true;
                     hasUserInteracted = true;
                     testAlarmBtn.textContent = 'Stop Alarm';
-                    console.log('testAlarm: Playing test alarm');
                 }
             }
 
             async function fetchTicketData() {
                 if (!accessToken) {
-                    console.log('fetchTicketData: No access token, skipping');
+                    console.log(`[${new Date().toISOString()}] fetchTicketData: No access token, skipping`);
                     lastFetchFailed = true;
                     return false;
                 }
-                const maxAttempts = 5;
-                for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                let ticketsFetched = false;
+                let statsFetched = false;
+                let downtimeFetched = false;
+
+                for (let attempt = 1; attempt <= 3; attempt++) {
                     try {
-                        console.log(`fetchTicketData: Attempt ${attempt}/${maxAttempts}, timestamp: ${new Date().toISOString()}`);
                         const cacheBuster = `cb=${Date.now()}-${Math.random().toString(36).substring(2)}`;
+                        const { dailyReset, weeklyReset, currentTime } = getResetTimes();
+                        console.log(`[${new Date().toISOString()}] fetchTicketData: Attempt ${attempt} - Fetching tickets with reset times`, { dailyReset, weeklyReset });
+
+                        // Fetch tickets
                         const ticketUrl = `/api/tickets?${cacheBuster}`;
-                        console.log('fetchTicketData: Fetching tickets', ticketUrl);
+                        console.log(`[${new Date().toISOString()}] fetchTicketData: Requesting ${ticketUrl}`);
                         const ticketResponse = await fetch(ticketUrl, {
                             headers: { 
                                 'Authorization': `Bearer ${accessToken}`,
@@ -658,11 +691,13 @@
                             const errorText = await ticketResponse.text();
                             throw new Error(`Tickets HTTP ${ticketResponse.status}: ${errorText}`);
                         }
-                        const tickets = await ticketResponse.json();
-                        console.log('fetchTicketData: Tickets received', tickets.length, 'tickets');
+                        cachedTickets = await ticketResponse.json();
+                        console.log(`[${new Date().toISOString()}] fetchTicketData: Tickets received`, cachedTickets.length, 'tickets');
+                        ticketsFetched = true;
 
-                        console.log('fetchTicketData: Fetching stats', cacheBuster);
-                        const statsUrl = `/api/ticket-stats?${cacheBuster}`;
+                        // Fetch stats
+                        console.log(`[${new Date().toISOString()}] fetchTicketData: Fetching stats`);
+                        const statsUrl = `/api/ticket-stats?resetTime=${encodeURIComponent(currentTime)}&${cacheBuster}`;
                         const statsResponse = await fetch(statsUrl, {
                             headers: { 
                                 'Authorization': `Bearer ${accessToken}`,
@@ -676,10 +711,12 @@
                             throw new Error(`Stats HTTP ${statsResponse.status}: ${errorText}`);
                         }
                         cachedStats = await statsResponse.json();
-                        console.log('fetchTicketData: Stats received', cachedStats);
+                        console.log(`[${new Date().toISOString()}] fetchTicketData: Stats received`, cachedStats);
+                        statsFetched = true;
 
-                        console.log('fetchTicketData: Fetching downtime', cacheBuster);
-                        const downtimeUrl = `/api/downtime?${cacheBuster}`;
+                        // Fetch downtime
+                        console.log(`[${new Date().toISOString()}] fetchTicketData: Fetching downtime`);
+                        const downtimeUrl = `/api/downtime?resetTime=${encodeURIComponent(currentTime)}&${cacheBuster}`;
                         const downtimeResponse = await fetch(downtimeUrl, {
                             headers: { 
                                 'Authorization': `Bearer ${accessToken}`,
@@ -693,77 +730,80 @@
                             throw new Error(`Downtime HTTP ${downtimeResponse.status}: ${errorText}`);
                         }
                         cachedDowntime = await downtimeResponse.json();
-                        console.log('fetchTicketData: Downtime received', cachedDowntime);
+                        console.log(`[${new Date().toISOString()}] fetchTicketData: Downtime received`, cachedDowntime);
+                        downtimeFetched = true;
 
-                        cachedTickets = tickets;
                         lastFetchFailed = false;
-                        console.log('fetchTicketData: Success, ticket count:', tickets.length);
+                        console.log(`[${new Date().toISOString()}] fetchTicketData: Completed successfully`, { ticketCount: cachedTickets.length });
                         return true;
                     } catch (error) {
-                        console.error(`fetchTicketData: Attempt ${attempt}/${maxAttempts} failed`, error);
-                        if (attempt === maxAttempts) {
+                        console.error(`[${new Date().toISOString()}] fetchTicketData: Attempt ${attempt} failed`, error);
+                        if (attempt === 3) {
                             lastFetchFailed = true;
-                            console.error('fetchTicketData: All attempts failed', error);
-                            showErrorNotification(`Failed to fetch data after ${maxAttempts} attempts: ${error.message}`);
+                            console.error(`[${new Date().toISOString()}] fetchTicketData: All attempts failed`, error);
+                            alert(`Failed to fetch data after ${attempt} attempts: ${error.message}`);
+                            if (ticketsFetched) {
+                                console.log(`[${new Date().toISOString()}] fetchTicketData: Partial success, using cached tickets`);
+                                return true; // Allow partial success if tickets were fetched
+                            }
                             return false;
                         }
-                        const backoff = Math.pow(2, attempt) * 1000; // Exponential backoff: 1s, 2s, 4s, 8s, 16s
-                        console.log(`fetchTicketData: Waiting ${backoff}ms before retry`);
-                        await new Promise(resolve => setTimeout(resolve, backoff));
+                        await new Promise(resolve => setTimeout(resolve, 1000));
                     }
                 }
             }
 
             async function checkForAlarms() {
                 if (!accessToken) {
-                    console.log('checkForAlarms: No access token, skipping');
+                    console.log(`[${new Date().toISOString()}] checkForAlarms: No access token, skipping`);
                     lastFetchFailed = true;
                     return;
                 }
                 try {
                     const success = await fetchTicketData();
-                    if (!success) {
-                        console.error('checkForAlarms: Fetch failed');
-                        lastFetchFailed = true;
+                    if (!success && !lastFetchFailed) {
+                        console.error(`[${new Date().toISOString()}] checkForAlarms: Fetch failed`);
                         return;
                     }
 
                     const openTickets = cachedTickets.filter(t => t.status === 'Open');
-                    console.log('checkForAlarms: Open tickets', openTickets.length, 'timestamp:', new Date().toISOString());
+                    console.log(`[${new Date().toISOString()}] checkForAlarms: Open tickets`, openTickets.length);
 
                     const now = new Date();
                     const threeMinutesAgo = new Date(now.getTime() - 3 * 60 * 1000);
                     const overdueTickets = openTickets.filter(ticket => new Date(ticket.created_at) < threeMinutesAgo);
-                    console.log('checkForAlarms: Overdue tickets', overdueTickets.length);
+                    console.log(`[${new Date().toISOString()}] checkForAlarms: Overdue tickets`, overdueTickets.length);
 
                     if (overdueTickets.length > 0 && !isTestAlarmPlaying) {
-                        console.log('checkForAlarms: Starting alarm for overdue tickets');
+                        console.log(`[${new Date().toISOString()}] checkForAlarms: Starting alarm for overdue tickets`);
                         startAlarm();
                     } else if (!isTestAlarmPlaying) {
-                        console.log('checkForAlarms: Stopping alarm');
+                        console.log(`[${new Date().toISOString()}] checkForAlarms: Stopping alarm`);
                         stopAlarm();
                     }
 
-                    console.log('checkForAlarms: Updating dashboard');
+                    console.log(`[${new Date().toISOString()}] checkForAlarms: Updating dashboard`);
                     loadDashboard();
                 } catch (error) {
-                    console.error('checkForAlarms: Error', error);
+                    console.error(`[${new Date().toISOString()}] checkForAlarms: Error`, error);
                     lastFetchFailed = true;
-                    showErrorNotification(`Error in checkForAlarms: ${error.message}`);
+                    alert(`Error in checkForAlarms: ${error.message}`);
                 }
             }
 
             async function loadDashboard() {
                 if (!accessToken) {
-                    console.log('loadDashboard: No access token, skipping');
+                    console.log(`[${new Date().toISOString()}] loadDashboard: No access token, skipping`);
                     return;
                 }
                 try {
-                    console.log('loadDashboard: Updating UI with cached data', {
+                    const { dailyReset, weeklyReset } = getResetTimes();
+                    console.log(`[${new Date().toISOString()}] loadDashboard: Updating UI with cached data`, {
                         ticketCount: cachedTickets.length,
                         stats: cachedStats,
                         downtimeLines: cachedDowntime.length,
-                        timestamp: new Date().toISOString()
+                        dailyReset,
+                        weeklyReset
                     });
                     const tickets = cachedTickets;
                     const stats = cachedStats;
@@ -784,11 +824,11 @@
                         }
                         document.getElementById(`${line.toLowerCase()}-open`).textContent = openTickets;
                         document.getElementById(`${line.toLowerCase()}-ongoing`).textContent = ongoingTickets;
-                        console.log(`loadDashboard: Updated ${line} - Open: ${openTickets}, Ongoing: ${ongoingTickets}`);
+                        console.log(`[${new Date().toISOString()}] loadDashboard: Updated ${line} - Open: ${openTickets}, Ongoing: ${ongoingTickets}`);
                     });
 
-                    document.getElementById('tickets-today').textContent = stats.today;
-                    document.getElementById('tickets-week').textContent = stats.week;
+                    document.getElementById('tickets-today').textContent = stats.today || 0;
+                    document.getElementById('tickets-week').textContent = stats.week || 0;
 
                     const downtimeTable = document.getElementById('downtime-table');
                     downtimeTable.innerHTML = '';
@@ -801,10 +841,10 @@
                         `;
                         downtimeTable.appendChild(row);
                     });
-                    console.log('loadDashboard: UI update complete');
+                    console.log(`[${new Date().toISOString()}] loadDashboard: UI update complete`);
                 } catch (error) {
-                    console.error('loadDashboard: Error', error);
-                    showErrorNotification(`Failed to load dashboard: ${error.message}`);
+                    console.error(`[${new Date().toISOString()}] loadDashboard: Error`, error);
+                    alert(`Failed to load dashboard: ${error.message}`);
                 }
             }
 
@@ -818,7 +858,7 @@
                     if (filterStatus) queryParams.push(`status=${filterStatus}`);
                     queryParams.push(`cb=${Date.now()}-${Math.random().toString(36).substring(2)}`);
                     const url = `${baseUrl}?${queryParams.join('&')}`;
-                    console.log('loadAllTickets: Fetching tickets from', url);
+                    console.log(`[${new Date().toISOString()}] loadAllTickets: Fetching tickets from`, url);
                     const response = await fetch(url, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
@@ -832,7 +872,7 @@
                         throw new Error(`HTTP ${response.status}: ${errorText || 'Not Found'}`);
                     }
                     const tickets = await response.json();
-                    console.log('loadAllTickets: Tickets received', tickets.length);
+                    console.log(`[${new Date().toISOString()}] loadAllTickets: Tickets received`, tickets.length);
                     if (tickets.length === 0) {
                         ticketList.innerHTML = '<tr><td colspan="7" class="p-2 text-gray-600 text-center">No tickets found</td></tr>';
                         return;
@@ -852,17 +892,15 @@
                         ticketList.appendChild(row);
                     });
                 } catch (error) {
-                    console.error('loadAllTickets: Error', error);
+                    console.error(`[${new Date().toISOString()}] loadAllTickets: Error`, error);
                     ticketList.innerHTML = '<tr><td colspan="7" class="p-2 text-red-600 text-center">Failed to load tickets: ' + error.message + '</td></tr>';
-                    showErrorNotification(`Failed to load tickets: ${error.message}`);
+                    alert(`Failed to load tickets: ${error.message}`);
                 }
             }
 
             async function loadTicketDetails(ticketId) {
                 try {
-                    const url = `/api/tickets/${ticketId}?cb=${Date.now()}-${Math.random().toString(36).substring(2)}`;
-                    console.log('loadTicketDetails: Fetching', url);
-                    const response = await fetch(url, {
+                    const response = await fetch(`/api/tickets/${ticketId}?cb=${Date.now()}-${Math.random().toString(36).substring(2)}`, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
                             'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -872,7 +910,6 @@
                     });
                     if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
                     const ticket = await response.json();
-                    console.log('loadTicketDetails: Ticket received', ticket.ticket_id);
                     document.getElementById('ticket-details-content').innerHTML = `
                         <p class="mb-2"><strong>Ticket ID:</strong> ${ticket.ticket_id}</p>
                         <p class="mb-2"><strong>Employee ID:</strong> ${ticket.employee_id}</p>
@@ -890,17 +927,15 @@
                         <p class="mb-2"><strong>Fix:</strong> ${ticket.fix || 'N/A'}</p>
                     `;
                 } catch (error) {
-                    console.error('loadTicketDetails: Error', error);
-                    showErrorNotification(`Failed to load ticket details: ${error.message}`);
+                    console.error(`[${new Date().toISOString()}] Error loading ticket details:`, error);
+                    alert(`Failed to load ticket details: ${error.message}`);
                 }
             }
 
             async function loadLineTickets(line) {
-                console.log('loadLineTickets called with:', { line, timestamp: new Date().toISOString() });
+                console.log(`[${new Date().toISOString()}] loadLineTickets called with:`, { line });
                 try {
-                    const url = `/api/tickets?status=Open,Ongoing&cb=${Date.now()}-${Math.random().toString(36).substring(2)}`;
-                    console.log('loadLineTickets: Fetching', url);
-                    const response = await fetch(url, {
+                    const response = await fetch(`/api/tickets?status=Open,Ongoing&cb=${Date.now()}-${Math.random().toString(36).substring(2)}`, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
                             'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -911,7 +946,6 @@
                     if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
                     const tickets = await response.json();
                     const lineTickets = tickets.filter(t => t.line === line && ['Open', 'Ongoing'].includes(t.status));
-                    console.log('loadLineTickets: Received', lineTickets.length, 'tickets for', line);
                     document.getElementById('line-title').textContent = line;
                     const content = document.getElementById('line-tickets-content');
                     content.innerHTML = '';
@@ -946,35 +980,35 @@
                         const target = event.target;
                         if (target.classList.contains('details-btn')) {
                             const ticketId = target.getAttribute('data-ticket-id');
-                            console.log('Details button clicked:', { ticketId, timestamp: new Date().toISOString() });
+                            console.log(`[${new Date().toISOString()}] Details button clicked:`, { ticketId });
                             showModal('ticket-details-modal', ticketId);
                         } else if (target.classList.contains('assign-btn') && ['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser?.role)) {
                             const ticketId = target.getAttribute('data-ticket-id');
                             const status = target.getAttribute('data-status');
-                            console.log('Assign button clicked:', { ticketId, status, timestamp: new Date().toISOString() });
+                            console.log(`[${new Date().toISOString()}] Assign button clicked:`, { ticketId, status });
                             handleStatusClick(ticketId, status);
                         } else if (target.classList.contains('resolve-btn') && ['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser?.role)) {
                             const ticketId = target.getAttribute('data-ticket-id');
                             const status = target.getAttribute('data-status');
-                            console.log('Resolve button clicked:', { ticketId, status, timestamp: new Date().toISOString() });
+                            console.log(`[${new Date().toISOString()}] Resolve button clicked:`, { ticketId, status });
                             handleStatusClick(ticketId, status);
                         }
                     });
                 } catch (error) {
-                    console.error('loadLineTickets: Error', error);
-                    showErrorNotification(`Failed to load line tickets: ${error.message}`);
+                    console.error(`[${new Date().toISOString()}] Error loading line tickets:`, error);
+                    alert(`Failed to load line tickets: ${error.message}`);
                 }
             }
 
             function handleStatusClick(ticketId, status) {
-                console.log('handleStatusClick called with:', { ticketId, status, timestamp: new Date().toISOString() });
+                console.log(`[${new Date().toISOString()}] handleStatusClick called with:`, { ticketId, status });
                 if (!ticketId) {
-                    console.error('handleStatusClick: No ticketId provided');
-                    showErrorNotification('Error: No ticket selected');
+                    console.error(`[${new Date().toISOString()}] No ticketId provided to handleStatusClick`);
+                    alert('Error: No ticket selected');
                     return;
                 }
                 currentTicketId = ticketId;
-                console.log('handleStatusClick: Set currentTicketId:', currentTicketId);
+                console.log(`[${new Date().toISOString()}] Set currentTicketId:`, currentTicketId);
                 if (status === 'Open' && ['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser?.role)) {
                     showModal('assign-ticket-modal', ticketId);
                 } else if (status === 'Ongoing' && ['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser?.role)) {
@@ -985,15 +1019,15 @@
             async function assignTicket() {
                 const technicianName = document.getElementById('technician-name').value;
                 if (!technicianName) {
-                    showErrorNotification('Please select a technician');
+                    alert('Please select a technician');
                     return;
                 }
                 if (!currentTicketId) {
-                    console.error('assignTicket: No currentTicketId');
-                    showErrorNotification('Error: No ticket selected');
+                    console.error(`[${new Date().toISOString()}] No currentTicketId in assignTicket`);
+                    alert('Error: No ticket selected');
                     return;
                 }
-                console.log('assignTicket: Assigning ticket', { ticketId: currentTicketId, technicianName, timestamp: new Date().toISOString() });
+                console.log(`[${new Date().toISOString()}] Assigning ticket:`, { ticketId: currentTicketId, technicianName });
                 try {
                     const response = await fetch(`/api/tickets/${currentTicketId}/assign`, {
                         method: 'PUT',
@@ -1010,17 +1044,16 @@
                         const errorText = await response.text();
                         throw new Error(`HTTP ${response.status}: ${errorText}`);
                     }
-                    console.log('assignTicket: Success');
                     closeModal('assign-ticket-modal');
                     if (currentLine) loadLineTickets(currentLine);
                     loadAllTickets();
+                    console.log(`[${new Date().toISOString()}] assignTicket: Forcing data fetch and dashboard update`);
                     await fetchTicketData();
-                    console.log('assignTicket: Forcing dashboard update');
                     loadDashboard();
                     alert('Ticket assigned successfully');
                 } catch (error) {
-                    console.error('assignTicket: Error', error);
-                    showErrorNotification(`Failed to assign ticket: ${error.message}`);
+                    console.error(`[${new Date().toISOString()}] Error assigning ticket:`, error);
+                    alert(`Failed to assign ticket: ${error.message}`);
                 }
             }
 
@@ -1028,18 +1061,16 @@
                 const issue = document.getElementById('issue').value;
                 const fix = document.getElementById('fix').value;
                 if (!issue || !fix) {
-                    showErrorNotification('Please fill in issue and fix');
+                    alert('Please fill in issue and fix');
                     return;
                 }
                 if (!currentTicketId) {
-                    console.error('resolveTicket: No currentTicketId');
-                    showErrorNotification('Error: No ticket selected');
+                    console.error(`[${new Date().toISOString()}] No currentTicketId in resolveTicket`);
+                    alert('Error: No ticket selected');
                     return;
                 }
                 try {
-                    const ticketUrl = `/api/tickets/${currentTicketId}?cb=${Date.now()}-${Math.random().toString(36).substring(2)}`;
-                    console.log('resolveTicket: Fetching ticket', ticketUrl);
-                    const ticketResponse = await fetch(ticketUrl, {
+                    const ticketResponse = await fetch(`/api/tickets/${currentTicketId}?cb=${Date.now()}-${Math.random().toString(36).substring(2)}`, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
                             'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -1050,7 +1081,7 @@
                     if (!ticketResponse.ok) throw new Error(`HTTP ${ticketResponse.status}: ${await ticketResponse.text()}`);
                     const ticket = await ticketResponse.json();
                     const resolvedBy = ticket.assigned_to || 'Unknown';
-                    console.log('resolveTicket: Resolving ticket', { ticketId: currentTicketId, issue, fix, resolvedBy });
+                    console.log(`[${new Date().toISOString()}] Resolving ticket:`, { ticketId: currentTicketId, issue, fix, resolvedBy });
                     const response = await fetch(`/api/tickets/${currentTicketId}/resolve`, {
                         method: 'PUT',
                         headers: { 
@@ -1066,17 +1097,16 @@
                         const errorText = await response.text();
                         throw new Error(`HTTP ${response.status}: ${errorText}`);
                     }
-                    console.log('resolveTicket: Success');
                     closeModal('resolve-ticket-modal');
                     if (currentLine) loadLineTickets(currentLine);
                     loadAllTickets();
+                    console.log(`[${new Date().toISOString()}] resolveTicket: Forcing data fetch and dashboard update`);
                     await fetchTicketData();
-                    console.log('resolveTicket: Forcing dashboard update');
                     loadDashboard();
                     alert('Ticket resolved successfully');
                 } catch (error) {
-                    console.error('resolveTicket: Error', error);
-                    showErrorNotification(`Failed to resolve ticket: ${error.message}`);
+                    console.error(`[${new Date().toISOString()}] Error resolving ticket:`, error);
+                    alert(`Failed to resolve ticket: ${error.message}`);
                 }
             }
 
@@ -1093,7 +1123,7 @@
                     if (fromDate) queryParams.push(`from=${fromDate}`);
                     if (toDate) queryParams.push(`to=${toDate}`);
                     const url = `${baseUrl}?${queryParams.join('&')}`;
-                    console.log('loadAnalytics: Fetching', url);
+                    console.log(`[${new Date().toISOString()}] loadAnalytics: Fetching from`, url);
                     const response = await fetch(url, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
@@ -1104,7 +1134,8 @@
                     });
                     if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
                     let data = await response.json();
-                    console.log('loadAnalytics: Data received', data.length, 'items');
+                    console.log(`[${new Date().toISOString()}] Analytics data:`, data);
+
                     data = data.filter(item => (type === 'downtime' ? item.downtime : item.count) > 0)
                         .sort((a, b) => {
                             const valueA = type === 'downtime' ? a.downtime : a.count;
@@ -1158,8 +1189,8 @@
 
                     updateTechnicianTable();
                 } catch (error) {
-                    console.error('loadAnalytics: Error', error);
-                    showErrorNotification(`Failed to load analytics: ${error.message}`);
+                    console.error(`[${new Date().toISOString()}] Error loading analytics:`, error);
+                    alert(`Failed to load analytics: ${error.message}`);
                 }
             }
 
@@ -1174,7 +1205,7 @@
                     if (fromDate) queryParams.push(`from=${fromDate}`);
                     if (toDate) queryParams.push(`to=${toDate}`);
                     const url = `${baseUrl}?${queryParams.join('&')}`;
-                    console.log('updateTechnicianTable: Fetching', url);
+                    console.log(`[${new Date().toISOString()}] updateTechnicianTable: Fetching from`, url);
                     const response = await fetch(url, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
@@ -1185,7 +1216,7 @@
                     });
                     if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
                     const data = await response.json();
-                    console.log('updateTechnicianTable: Data received', data.length, 'items');
+                    console.log(`[${new Date().toISOString()}] Technician data:`, data);
                     const tbody = document.getElementById('technician-table');
                     tbody.innerHTML = '';
                     data.forEach(item => {
@@ -1204,17 +1235,15 @@
                         tbody.appendChild(tr);
                     }
                 } catch (error) {
-                    console.error('updateTechnicianTable: Error', error);
-                    showErrorNotification(`Failed to load technician data: ${error.message}`);
+                    console.error(`[${new Date().toISOString()}] Error loading technician table:`, error);
+                    alert(`Failed to load technician data: ${error.message}`);
                 }
             }
 
             async function init() {
                 try {
                     if (accessToken) {
-                        const url = `/api/user?cb=${Date.now()}-${Math.random().toString(36).substring(2)}`;
-                        console.log('init: Validating token', url);
-                        const response = await fetch(url, {
+                        const response = await fetch(`/api/user?cb=${Date.now()}-${Math.random().toString(36).substring(2)}`, {
                             headers: { 
                                 'Authorization': `Bearer ${accessToken}`,
                                 'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -1225,10 +1254,9 @@
                         if (response.ok) {
                             const { role, email } = await response.json();
                             currentUser = { role, email };
-                            console.log('init: Token valid, user:', email, 'role:', role);
                             await fetchTicketData();
                         } else {
-                            console.warn('init: Invalid access token, clearing');
+                            console.warn(`[${new Date().toISOString()}] init: Invalid access token, clearing`);
                             localStorage.removeItem('accessToken');
                             accessToken = null;
                         }
@@ -1236,14 +1264,14 @@
                     updateUIForRole();
                     showScreen('dashboard');
                     if (!alarmInterval) {
-                        console.log('init: Starting polling interval (2s)');
+                        console.log(`[${new Date().toISOString()}] init: Starting polling interval`);
                         alarmInterval = setInterval(checkForAlarms, 2000);
                     }
+                    scheduleResets();
                 } catch (error) {
-                    console.error('init: Error', error);
+                    console.error(`[${new Date().toISOString()}] init: Error`, error);
                     updateUIForRole();
                     showScreen('dashboard');
-                    showErrorNotification(`Initialization failed: ${error.message}`);
                 }
             }
 
