@@ -455,7 +455,7 @@
                     return;
                 }
                 try {
-                    console.log('login: Attempting login for', email);
+                    console.log('login: Attempting login for', email, 'timestamp:', new Date().toISOString());
                     const response = await fetch('/api/login', {
                         method: 'POST',
                         headers: { 
@@ -483,7 +483,7 @@
 
             async function logout() {
                 try {
-                    console.log('logout: Attempting logout');
+                    console.log('logout: Attempting logout, timestamp:', new Date().toISOString());
                     const response = await fetch('/api/logout', {
                         method: 'POST',
                         headers: { 
@@ -526,7 +526,7 @@
                     analyticsBtn.classList.add('hidden');
                     testAlarmBtn.classList.add('hidden');
                     userRole.textContent = 'Not logged in';
-                    console.log('updateUIForRole: User not logged in');
+                    console.log('updateUIForRole: User not logged in, timestamp:', new Date().toISOString());
                     return;
                 }
 
@@ -538,7 +538,7 @@
                 allTicketsBtn.classList.remove('hidden');
                 analyticsBtn.classList.remove('hidden');
                 testAlarmBtn.classList.toggle('hidden', !['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser.role));
-                console.log('updateUIForRole: Updated for role', currentUser.role);
+                console.log('updateUIForRole: Updated for role', currentUser.role, 'timestamp:', new Date().toISOString());
             }
 
             let currentTicketId = null;
@@ -557,7 +557,7 @@
                 }
 
                 try {
-                    console.log('submitTicket: Submitting ticket', { employeeId, line, process });
+                    console.log('submitTicket: Submitting ticket', { employeeId, line, process }, 'timestamp:', new Date().toISOString());
                     const response = await fetch('/api/tickets', {
                         method: 'POST',
                         headers: { 
@@ -580,11 +580,11 @@
                     document.getElementById('line').value = '';
                     document.getElementById('operation').innerHTML = '<option value="">Select Operation</option>';
                     document.getElementById('description').value = '';
-                    alert('Ticket submitted successfully');
                     await fetchTicketData();
                     console.log('submitTicket: Forcing dashboard update');
                     loadDashboard();
                     showScreen('dashboard');
+                    alert('Ticket submitted successfully');
                 } catch (error) {
                     console.error('submitTicket: Error', error);
                     showErrorNotification(`Failed to submit ticket: ${error.message}`);
@@ -593,7 +593,7 @@
 
             function startAlarm() {
                 if (!hasUserInteracted && !isTestAlarmPlaying) {
-                    console.log('startAlarm: Blocked, no user interaction');
+                    console.log('startAlarm: Blocked, no user interaction, timestamp:', new Date().toISOString());
                     return;
                 }
                 const alarm = document.getElementById('alarm');
@@ -608,11 +608,12 @@
                 alarm.pause();
                 alarm.currentTime = 0;
                 isTestAlarmPlaying = false;
-                if (alarmInterval) {
-                    clearInterval(alarmInterval);
-                    alarmInterval = null;
+                console.log('stopAlarm: Alarm stopped, timestamp:', new Date().toISOString());
+                // Restart polling if interval was cleared
+                if (!alarmInterval) {
+                    console.log('stopAlarm: Restarting polling interval (5s), timestamp:', new Date().toISOString());
+                    alarmInterval = setInterval(checkForAlarms, 5000);
                 }
-                console.log('stopAlarm: Alarm stopped');
             }
 
             function testAlarm() {
@@ -629,13 +630,13 @@
                     isTestAlarmPlaying = true;
                     hasUserInteracted = true;
                     testAlarmBtn.textContent = 'Stop Alarm';
-                    console.log('testAlarm: Playing test alarm');
+                    console.log('testAlarm: Playing test alarm, timestamp:', new Date().toISOString());
                 }
             }
 
             async function fetchTicketData() {
                 if (!accessToken) {
-                    console.log('fetchTicketData: No access token, skipping');
+                    console.log('fetchTicketData: No access token, skipping, timestamp:', new Date().toISOString());
                     lastFetchFailed = true;
                     return false;
                 }
@@ -716,14 +717,17 @@
 
             async function checkForAlarms() {
                 if (!accessToken) {
-                    console.log('checkForAlarms: No access token, skipping');
+                    console.log('checkForAlarms: No access token, skipping, timestamp:', new Date().toISOString());
                     lastFetchFailed = true;
                     return;
                 }
                 try {
+                    if (lastFetchFailed) {
+                        console.warn('checkForAlarms: Previous fetch failed, forcing refresh, timestamp:', new Date().toISOString());
+                    }
                     const success = await fetchTicketData();
                     if (!success) {
-                        console.error('checkForAlarms: Fetch failed');
+                        console.error('checkForAlarms: Fetch failed, timestamp:', new Date().toISOString());
                         lastFetchFailed = true;
                         return;
                     }
@@ -734,20 +738,20 @@
                     const now = new Date();
                     const threeMinutesAgo = new Date(now.getTime() - 3 * 60 * 1000);
                     const overdueTickets = openTickets.filter(ticket => new Date(ticket.created_at) < threeMinutesAgo);
-                    console.log('checkForAlarms: Overdue tickets', overdueTickets.length);
+                    console.log('checkForAlarms: Overdue tickets', overdueTickets.length, 'timestamp:', new Date().toISOString());
 
                     if (overdueTickets.length > 0 && !isTestAlarmPlaying) {
-                        console.log('checkForAlarms: Starting alarm for overdue tickets');
+                        console.log('checkForAlarms: Starting alarm for overdue tickets, timestamp:', new Date().toISOString());
                         startAlarm();
                     } else if (!isTestAlarmPlaying) {
-                        console.log('checkForAlarms: Stopping alarm');
+                        console.log('checkForAlarms: Stopping alarm, timestamp:', new Date().toISOString());
                         stopAlarm();
                     }
 
-                    console.log('checkForAlarms: Updating dashboard');
+                    console.log('checkForAlarms: Updating dashboard, timestamp:', new Date().toISOString());
                     loadDashboard();
                 } catch (error) {
-                    console.error('checkForAlarms: Error', error);
+                    console.error('checkForAlarms: Error', error, 'timestamp:', new Date().toISOString());
                     lastFetchFailed = true;
                     showErrorNotification(`Error in checkForAlarms: ${error.message}`);
                 }
@@ -755,7 +759,7 @@
 
             async function loadDashboard() {
                 if (!accessToken) {
-                    console.log('loadDashboard: No access token, skipping');
+                    console.log('loadDashboard: No access token, skipping, timestamp:', new Date().toISOString());
                     return;
                 }
                 try {
@@ -801,9 +805,9 @@
                         `;
                         downtimeTable.appendChild(row);
                     });
-                    console.log('loadDashboard: UI update complete');
+                    console.log('loadDashboard: UI update complete, timestamp:', new Date().toISOString());
                 } catch (error) {
-                    console.error('loadDashboard: Error', error);
+                    console.error('loadDashboard: Error', error, 'timestamp:', new Date().toISOString());
                     showErrorNotification(`Failed to load dashboard: ${error.message}`);
                 }
             }
@@ -818,7 +822,7 @@
                     if (filterStatus) queryParams.push(`status=${filterStatus}`);
                     queryParams.push(`cb=${Date.now()}-${Math.random().toString(36).substring(2)}`);
                     const url = `${baseUrl}?${queryParams.join('&')}`;
-                    console.log('loadAllTickets: Fetching tickets from', url);
+                    console.log('loadAllTickets: Fetching tickets from', url, 'timestamp:', new Date().toISOString());
                     const response = await fetch(url, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
@@ -832,7 +836,7 @@
                         throw new Error(`HTTP ${response.status}: ${errorText || 'Not Found'}`);
                     }
                     const tickets = await response.json();
-                    console.log('loadAllTickets: Tickets received', tickets.length);
+                    console.log('loadAllTickets: Tickets received', tickets.length, 'timestamp:', new Date().toISOString());
                     if (tickets.length === 0) {
                         ticketList.innerHTML = '<tr><td colspan="7" class="p-2 text-gray-600 text-center">No tickets found</td></tr>';
                         return;
@@ -852,7 +856,7 @@
                         ticketList.appendChild(row);
                     });
                 } catch (error) {
-                    console.error('loadAllTickets: Error', error);
+                    console.error('loadAllTickets: Error', error, 'timestamp:', new Date().toISOString());
                     ticketList.innerHTML = '<tr><td colspan="7" class="p-2 text-red-600 text-center">Failed to load tickets: ' + error.message + '</td></tr>';
                     showErrorNotification(`Failed to load tickets: ${error.message}`);
                 }
@@ -861,7 +865,7 @@
             async function loadTicketDetails(ticketId) {
                 try {
                     const url = `/api/tickets/${ticketId}?cb=${Date.now()}-${Math.random().toString(36).substring(2)}`;
-                    console.log('loadTicketDetails: Fetching', url);
+                    console.log('loadTicketDetails: Fetching', url, 'timestamp:', new Date().toISOString());
                     const response = await fetch(url, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
@@ -872,7 +876,7 @@
                     });
                     if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
                     const ticket = await response.json();
-                    console.log('loadTicketDetails: Ticket received', ticket.ticket_id);
+                    console.log('loadTicketDetails: Ticket received', ticket.ticket_id, 'timestamp:', new Date().toISOString());
                     document.getElementById('ticket-details-content').innerHTML = `
                         <p class="mb-2"><strong>Ticket ID:</strong> ${ticket.ticket_id}</p>
                         <p class="mb-2"><strong>Employee ID:</strong> ${ticket.employee_id}</p>
@@ -890,7 +894,7 @@
                         <p class="mb-2"><strong>Fix:</strong> ${ticket.fix || 'N/A'}</p>
                     `;
                 } catch (error) {
-                    console.error('loadTicketDetails: Error', error);
+                    console.error('loadTicketDetails: Error', error, 'timestamp:', new Date().toISOString());
                     showErrorNotification(`Failed to load ticket details: ${error.message}`);
                 }
             }
@@ -899,7 +903,7 @@
                 console.log('loadLineTickets called with:', { line, timestamp: new Date().toISOString() });
                 try {
                     const url = `/api/tickets?status=Open,Ongoing&cb=${Date.now()}-${Math.random().toString(36).substring(2)}`;
-                    console.log('loadLineTickets: Fetching', url);
+                    console.log('loadLineTickets: Fetching', url, 'timestamp:', new Date().toISOString());
                     const response = await fetch(url, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
@@ -911,7 +915,7 @@
                     if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
                     const tickets = await response.json();
                     const lineTickets = tickets.filter(t => t.line === line && ['Open', 'Ongoing'].includes(t.status));
-                    console.log('loadLineTickets: Received', lineTickets.length, 'tickets for', line);
+                    console.log('loadLineTickets: Received', lineTickets.length, 'tickets for', line, 'timestamp:', new Date().toISOString());
                     document.getElementById('line-title').textContent = line;
                     const content = document.getElementById('line-tickets-content');
                     content.innerHTML = '';
@@ -961,7 +965,7 @@
                         }
                     });
                 } catch (error) {
-                    console.error('loadLineTickets: Error', error);
+                    console.error('loadLineTickets: Error', error, 'timestamp:', new Date().toISOString());
                     showErrorNotification(`Failed to load line tickets: ${error.message}`);
                 }
             }
@@ -969,12 +973,12 @@
             function handleStatusClick(ticketId, status) {
                 console.log('handleStatusClick called with:', { ticketId, status, timestamp: new Date().toISOString() });
                 if (!ticketId) {
-                    console.error('handleStatusClick: No ticketId provided');
+                    console.error('handleStatusClick: No ticketId provided', 'timestamp:', new Date().toISOString());
                     showErrorNotification('Error: No ticket selected');
                     return;
                 }
                 currentTicketId = ticketId;
-                console.log('handleStatusClick: Set currentTicketId:', currentTicketId);
+                console.log('handleStatusClick: Set currentTicketId:', currentTicketId, 'timestamp:', new Date().toISOString());
                 if (status === 'Open' && ['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser?.role)) {
                     showModal('assign-ticket-modal', ticketId);
                 } else if (status === 'Ongoing' && ['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser?.role)) {
@@ -989,7 +993,7 @@
                     return;
                 }
                 if (!currentTicketId) {
-                    console.error('assignTicket: No currentTicketId');
+                    console.error('assignTicket: No currentTicketId', 'timestamp:', new Date().toISOString());
                     showErrorNotification('Error: No ticket selected');
                     return;
                 }
@@ -1010,16 +1014,16 @@
                         const errorText = await response.text();
                         throw new Error(`HTTP ${response.status}: ${errorText}`);
                     }
-                    console.log('assignTicket: Success');
+                    console.log('assignTicket: Success, timestamp:', new Date().toISOString());
                     closeModal('assign-ticket-modal');
                     if (currentLine) loadLineTickets(currentLine);
                     loadAllTickets();
                     await fetchTicketData();
-                    console.log('assignTicket: Forcing dashboard update');
+                    console.log('assignTicket: Forcing dashboard update, timestamp:', new Date().toISOString());
                     loadDashboard();
                     alert('Ticket assigned successfully');
                 } catch (error) {
-                    console.error('assignTicket: Error', error);
+                    console.error('assignTicket: Error', error, 'timestamp:', new Date().toISOString());
                     showErrorNotification(`Failed to assign ticket: ${error.message}`);
                 }
             }
@@ -1032,13 +1036,13 @@
                     return;
                 }
                 if (!currentTicketId) {
-                    console.error('resolveTicket: No currentTicketId');
+                    console.error('resolveTicket: No currentTicketId', 'timestamp:', new Date().toISOString());
                     showErrorNotification('Error: No ticket selected');
                     return;
                 }
                 try {
                     const ticketUrl = `/api/tickets/${currentTicketId}?cb=${Date.now()}-${Math.random().toString(36).substring(2)}`;
-                    console.log('resolveTicket: Fetching ticket', ticketUrl);
+                    console.log('resolveTicket: Fetching ticket', ticketUrl, 'timestamp:', new Date().toISOString());
                     const ticketResponse = await fetch(ticketUrl, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
@@ -1050,7 +1054,7 @@
                     if (!ticketResponse.ok) throw new Error(`HTTP ${ticketResponse.status}: ${await ticketResponse.text()}`);
                     const ticket = await ticketResponse.json();
                     const resolvedBy = ticket.assigned_to || 'Unknown';
-                    console.log('resolveTicket: Resolving ticket', { ticketId: currentTicketId, issue, fix, resolvedBy });
+                    console.log('resolveTicket: Resolving ticket', { ticketId: currentTicketId, issue, fix, resolvedBy }, 'timestamp:', new Date().toISOString());
                     const response = await fetch(`/api/tickets/${currentTicketId}/resolve`, {
                         method: 'PUT',
                         headers: { 
@@ -1066,16 +1070,16 @@
                         const errorText = await response.text();
                         throw new Error(`HTTP ${response.status}: ${errorText}`);
                     }
-                    console.log('resolveTicket: Success');
+                    console.log('resolveTicket: Success, timestamp:', new Date().toISOString());
                     closeModal('resolve-ticket-modal');
                     if (currentLine) loadLineTickets(currentLine);
                     loadAllTickets();
                     await fetchTicketData();
-                    console.log('resolveTicket: Forcing dashboard update');
+                    console.log('resolveTicket: Forcing dashboard update, timestamp:', new Date().toISOString());
                     loadDashboard();
                     alert('Ticket resolved successfully');
                 } catch (error) {
-                    console.error('resolveTicket: Error', error);
+                    console.error('resolveTicket: Error', error, 'timestamp:', new Date().toISOString());
                     showErrorNotification(`Failed to resolve ticket: ${error.message}`);
                 }
             }
@@ -1093,7 +1097,7 @@
                     if (fromDate) queryParams.push(`from=${fromDate}`);
                     if (toDate) queryParams.push(`to=${toDate}`);
                     const url = `${baseUrl}?${queryParams.join('&')}`;
-                    console.log('loadAnalytics: Fetching', url);
+                    console.log('loadAnalytics: Fetching', url, 'timestamp:', new Date().toISOString());
                     const response = await fetch(url, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
@@ -1104,7 +1108,7 @@
                     });
                     if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
                     let data = await response.json();
-                    console.log('loadAnalytics: Data received', data.length, 'items');
+                    console.log('loadAnalytics: Data received', data.length, 'items', 'timestamp:', new Date().toISOString());
                     data = data.filter(item => (type === 'downtime' ? item.downtime : item.count) > 0)
                         .sort((a, b) => {
                             const valueA = type === 'downtime' ? a.downtime : a.count;
@@ -1158,7 +1162,7 @@
 
                     updateTechnicianTable();
                 } catch (error) {
-                    console.error('loadAnalytics: Error', error);
+                    console.error('loadAnalytics: Error', error, 'timestamp:', new Date().toISOString());
                     showErrorNotification(`Failed to load analytics: ${error.message}`);
                 }
             }
@@ -1174,7 +1178,7 @@
                     if (fromDate) queryParams.push(`from=${fromDate}`);
                     if (toDate) queryParams.push(`to=${toDate}`);
                     const url = `${baseUrl}?${queryParams.join('&')}`;
-                    console.log('updateTechnicianTable: Fetching', url);
+                    console.log('updateTechnicianTable: Fetching', url, 'timestamp:', new Date().toISOString());
                     const response = await fetch(url, {
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
@@ -1185,7 +1189,7 @@
                     });
                     if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
                     const data = await response.json();
-                    console.log('updateTechnicianTable: Data received', data.length, 'items');
+                    console.log('updateTechnicianTable: Data received', data.length, 'items', 'timestamp:', new Date().toISOString());
                     const tbody = document.getElementById('technician-table');
                     tbody.innerHTML = '';
                     data.forEach(item => {
@@ -1204,7 +1208,7 @@
                         tbody.appendChild(tr);
                     }
                 } catch (error) {
-                    console.error('updateTechnicianTable: Error', error);
+                    console.error('updateTechnicianTable: Error', error, 'timestamp:', new Date().toISOString());
                     showErrorNotification(`Failed to load technician data: ${error.message}`);
                 }
             }
@@ -1213,7 +1217,7 @@
                 try {
                     if (accessToken) {
                         const url = `/api/user?cb=${Date.now()}-${Math.random().toString(36).substring(2)}`;
-                        console.log('init: Validating token', url);
+                        console.log('init: Validating token', url, 'timestamp:', new Date().toISOString());
                         const response = await fetch(url, {
                             headers: { 
                                 'Authorization': `Bearer ${accessToken}`,
@@ -1225,10 +1229,10 @@
                         if (response.ok) {
                             const { role, email } = await response.json();
                             currentUser = { role, email };
-                            console.log('init: Token valid, user:', email, 'role:', role);
+                            console.log('init: Token valid, user:', email, 'role:', role, 'timestamp:', new Date().toISOString());
                             await fetchTicketData();
                         } else {
-                            console.warn('init: Invalid access token, clearing');
+                            console.warn('init: Invalid access token, clearing, timestamp:', new Date().toISOString());
                             localStorage.removeItem('accessToken');
                             accessToken = null;
                         }
@@ -1236,11 +1240,11 @@
                     updateUIForRole();
                     showScreen('dashboard');
                     if (!alarmInterval) {
-                        console.log('init: Starting polling interval (5s)');
+                        console.log('init: Starting polling interval (5s), timestamp:', new Date().toISOString());
                         alarmInterval = setInterval(checkForAlarms, 5000);
                     }
                 } catch (error) {
-                    console.error('init: Error', error);
+                    console.error('init: Error', error, 'timestamp:', new Date().toISOString());
                     updateUIForRole();
                     showScreen('dashboard');
                     showErrorNotification(`Initialization failed: ${error.message}`);
