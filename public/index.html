@@ -132,7 +132,7 @@
                         <thead>
                             <tr class="bg-gray-200">
                                 <th class="p-2 text-left text-gray-700">Line</th>
-                                <th class="p-2 text-left text-gray-700">Tickets Closed</th>
+                                <th class="p-2 text-left text-gray-700">Tickets Generated</th>
                                 <th class="p-2 text-left text-gray-700">Downtime (Minutes)</th>
                             </tr>
                         </thead>
@@ -699,6 +699,10 @@
                         }
                         cachedStats = await statsResponse.json();
                         console.log('fetchTicketData: Stats received', JSON.stringify(cachedStats));
+                        if (typeof cachedStats.today === 'undefined' || cachedStats.today === null || cachedStats.today < 0) {
+                            console.warn('fetchTicketData: stats.today is invalid, defaulting to 0', cachedStats.today);
+                            cachedStats.today = 0;
+                        }
 
                         console.log('fetchTicketData: Fetching downtime', cacheBuster);
                         const downtimeUrl = `/api/downtime?${cacheBuster}&timezone=America/Mexico_City`;
@@ -812,16 +816,20 @@
                         console.log(`loadDashboard: Updated ${line} - Open: ${openTickets}, Ongoing: ${ongoingTickets}`);
                     });
 
-                    document.getElementById('tickets-today').textContent = stats.today;
-                    document.getElementById('tickets-week').textContent = stats.week;
+                    const safeTicketsToday = typeof stats.today === 'undefined' || stats.today === null || stats.today < 0 ? 0 : stats.today;
+                    if (typeof stats.today === 'undefined' || stats.today === null || stats.today < 0) {
+                        console.warn('loadDashboard: stats.today is invalid, defaulting to 0', stats.today);
+                    }
+                    document.getElementById('tickets-today').textContent = safeTicketsToday;
+                    document.getElementById('tickets-week').textContent = stats.week || 0;
 
                     const downtimeTable = document.getElementById('downtime-table');
                     downtimeTable.innerHTML = '';
-                    downtimeData.forEach(({ line, tickets_closed, downtime }) => {
-                        const safeTicketsClosed = typeof tickets_closed === 'undefined' || tickets_closed === null ? 0 : tickets_closed;
+                    downtimeData.forEach(({ line, tickets_generated, downtime }) => {
+                        const safeTicketsGenerated = typeof tickets_generated === 'undefined' || tickets_generated === null || tickets_generated < 0 ? 0 : tickets_generated;
                         const safeDowntime = typeof downtime === 'number' && downtime >= 0 ? downtime : 0;
-                        if (typeof tickets_closed === 'undefined') {
-                            console.warn(`loadDashboard: tickets_closed is undefined for line ${line}, defaulting to 0`);
+                        if (typeof tickets_generated === 'undefined' || tickets_generated === null || tickets_generated < 0) {
+                            console.warn(`loadDashboard: tickets_generated is invalid for line ${line}, defaulting to 0`, tickets_generated);
                         }
                         if (typeof downtime === 'number' && downtime < 0) {
                             console.warn(`loadDashboard: Negative downtime (${downtime}) detected for line ${line}, defaulting to 0`);
@@ -830,7 +838,7 @@
                         row.className = 'hover:bg-gray-50';
                         row.innerHTML = `
                             <td class="p-2">${line}</td>
-                            <td class="p-2">${safeTicketsClosed}</td>
+                            <td class="p-2">${safeTicketsGenerated}</td>
                             <td class="p-2">${safeDowntime}</td>
                         `;
                         downtimeTable.appendChild(row);
