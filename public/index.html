@@ -132,6 +132,7 @@
                         <thead>
                             <tr class="bg-gray-200">
                                 <th class="p-2 text-left text-gray-700">Line</th>
+                                <th class="p-2 text-left text-gray-700">Tickets Closed</th>
                                 <th class="p-2 text-left text-gray-700">Downtime (Minutes)</th>
                             </tr>
                         </thead>
@@ -816,11 +817,12 @@
 
                     const downtimeTable = document.getElementById('downtime-table');
                     downtimeTable.innerHTML = '';
-                    downtimeData.forEach(({ line, downtime }) => {
+                    downtimeData.forEach(({ line, tickets_closed, downtime }) => {
                         const row = document.createElement('tr');
                         row.className = 'hover:bg-gray-50';
                         row.innerHTML = `
                             <td class="p-2">${line}</td>
+                            <td class="p-2">${tickets_closed}</td>
                             <td class="p-2">${downtime}</td>
                         `;
                         downtimeTable.appendChild(row);
