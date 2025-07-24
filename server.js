@@ -28,11 +28,11 @@ app.post('/api/login', async (req, res) => {
         const { user } = data;
         const { data: userData, error: userError } = await supabase
             .from('users')
-            .select('role')
+            .select('role, email')
             .eq('id', user.id)
             .single();
         if (userError) throw userError;
-        res.json({ access_token: data.session.access_token, role: userData.role });
+        res.json({ access_token: data.session.access_token, role: userData.role, email: userData.email });
     } catch (error) {
         console.error('Login error:', error);
         res.status(401).json({ error: error.message });
@@ -57,11 +57,11 @@ app.get('/api/user', async (req, res) => {
         if (error) throw error;
         const { data: userData, error: userError } = await supabase
             .from('users')
-            .select('role')
+            .select('role, email')
             .eq('id', user.id)
             .single();
         if (userError) throw userError;
-        res.json({ role: userData.role });
+        res.json({ role: userData.role, email: userData.email });
     } catch (error) {
         res.status(401).json({ error: error.message });
     }
