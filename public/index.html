@@ -681,7 +681,7 @@
                             throw new Error(`Tickets HTTP ${ticketResponse.status}: ${errorText}`);
                         }
                         const tickets = await ticketResponse.json();
-                        console.log('fetchTicketData: Tickets received', tickets.length, 'tickets');
+                        console.log('fetchTicketData: Tickets received', tickets.length, 'tickets', JSON.stringify(tickets.slice(0, 2)));
 
                         console.log('fetchTicketData: Fetching stats', cacheBuster);
                         const statsUrl = `/api/ticket-stats?${cacheBuster}&timezone=America/Mexico_City`;
@@ -698,7 +698,7 @@
                             throw new Error(`Stats HTTP ${statsResponse.status}: ${errorText}`);
                         }
                         cachedStats = await statsResponse.json();
-                        console.log('fetchTicketData: Stats received', cachedStats);
+                        console.log('fetchTicketData: Stats received', JSON.stringify(cachedStats));
 
                         console.log('fetchTicketData: Fetching downtime', cacheBuster);
                         const downtimeUrl = `/api/downtime?${cacheBuster}&timezone=America/Mexico_City`;
@@ -715,7 +715,7 @@
                             throw new Error(`Downtime HTTP ${downtimeResponse.status}: ${errorText}`);
                         }
                         cachedDowntime = await downtimeResponse.json();
-                        console.log('fetchTicketData: Downtime received', cachedDowntime);
+                        console.log('fetchTicketData: Downtime received', JSON.stringify(cachedDowntime));
 
                         cachedTickets = tickets;
                         lastFetchFailed = false;
@@ -818,12 +818,20 @@
                     const downtimeTable = document.getElementById('downtime-table');
                     downtimeTable.innerHTML = '';
                     downtimeData.forEach(({ line, tickets_closed, downtime }) => {
+                        const safeTicketsClosed = typeof tickets_closed === 'undefined' || tickets_closed === null ? 0 : tickets_closed;
+                        const safeDowntime = typeof downtime === 'number' && downtime >= 0 ? downtime : 0;
+                        if (typeof tickets_closed === 'undefined') {
+                            console.warn(`loadDashboard: tickets_closed is undefined for line ${line}, defaulting to 0`);
+                        }
+                        if (typeof downtime === 'number' && downtime < 0) {
+                            console.warn(`loadDashboard: Negative downtime (${downtime}) detected for line ${line}, defaulting to 0`);
+                        }
                         const row = document.createElement('tr');
                         row.className = 'hover:bg-gray-50';
                         row.innerHTML = `
                             <td class="p-2">${line}</td>
-                            <td class="p-2">${tickets_closed}</td>
-                            <td class="p-2">${downtime}</td>
+                            <td class="p-2">${safeTicketsClosed}</td>
+                            <td class="p-2">${safeDowntime}</td>
                         `;
                         downtimeTable.appendChild(row);
                     });
