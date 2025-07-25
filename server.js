@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 const dotenv = require('dotenv');
+const { getCurrentMexicoCityTime } = require('./utils/time'); // Import the new utility
 
 dotenv.config();
 const app = express();
@@ -67,41 +68,22 @@ app.get('/api/user', async (req, res) => {
     }
 });
 
-// Tickets routes
-app.get('/api/tickets', async (req, res) => {
-    console.log('Handling GET /api/tickets', { query: req.query });
-    try {
-        const { status } = req.query;
-        let query = supabase.from('tickets').select('*');
-        if (status) query = query.in('status', status.split(','));
-        const { data, error } = await query;
-        if (error) throw error;
-        res.json(data);
-    } catch (error) {
-        console.error('Error fetching tickets:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
+// Tickets routes...
 
+// Route to create a new ticket
 app.post('/api/tickets', async (req, res) => {
+    const { employee_id, name, line, process, description } = req.body;
     try {
-        const { employee_id, name, line, process, description, status } = req.body;
-        const authHeader = req.headers.authorization;
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.split(' ')[1]);
-        if (authError) throw authError;
-        const ticket_id = `${line}-${Date.now()}`;
-        const { error } = await supabase.from('tickets').insert({
-            ticket_id,
-            employee_id,
-            name,
-            line,
-            process,
-            description,
-            status,
-            created_at: new Date().toISOString()
-        });
+        // Set created_at to current Mexico City time ISO string
+        const created_at = getCurrentMexicoCityTime().toISO();
+        const { data, error } = await supabase
+            .from('tickets')
+            .insert([{ employee_id, name, line, process, description, status: 'Open', created_at }])
+            .select('ticket_id')
+            .single();
+
         if (error) throw error;
+        const ticket_id = data.ticket_id;
         res.status(201).json({ ticket_id });
     } catch (error) {
         console.error('Error creating ticket:', error);
@@ -109,6 +91,7 @@ app.post('/api/tickets', async (req, res) => {
     }
 });
 
+// Route to get a specific ticket by ID
 app.get('/api/tickets/:ticket_id', async (req, res) => {
     try {
         const { ticket_id } = req.params;
@@ -117,6 +100,7 @@ app.get('/api/tickets/:ticket_id', async (req, res) => {
             .select('*')
             .eq('ticket_id', ticket_id)
             .single();
+
         if (error) throw error;
         res.json(data);
     } catch (error) {
@@ -125,183 +109,65 @@ app.get('/api/tickets/:ticket_id', async (req, res) => {
     }
 });
 
-app.put('/api/tickets/:ticket_id/assign', async (req, res) => {
+// Route to get all tickets with filtering and sorting
+app.get('/api/tickets', async (req, res) => {
     try {
-        const { ticket_id } = req.params;
-        const { assigned_to, status, assigned_at } = req.body;
-        const authHeader = req.headers.authorization;
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const { error } = await supabase
-            .from('tickets')
-            .update({ assigned_to, status, assigned_at })
-            .eq('ticket_id', ticket_id);
-        if (error) throw error;
-        res.json({ updated: true });
-    } catch (error) {
-        console.error('Error assigning ticket:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
+        let query = supabase.from('tickets').select('*');
 
-app.put('/api/tickets/:ticket_id/resolve', async (req, res) => {
-    try {
-        const { ticket_id } = req.params;
-        const { issue, fix, status, resolved_by, resolved_at } = req.body;
-        const authHeader = req.headers.authorization;
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const { error } = await supabase
-            .from('tickets')
-            .update({ issue, fix, status, resolved_by, resolved_at })
-            .eq('ticket_id', ticket_id);
-        if (error) throw error;
-        res.json({ updated: true });
-    } catch (error) {
-        console.error('Error resolving ticket:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
+        // Apply filters from query parameters
+        const { ticket_id, employee_id, line, process, description, status, from, to } = req.query;
 
-// Stats and analytics routes
-app.get('/api/ticket-stats', async (req, res) => {
-    try {
-        const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 0, 0);
-        const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay(), 8, 0, 0);
-        const { data: todayData, error: todayError } = await supabase
-            .from('tickets')
-            .select('ticket_id')
-            .gte('created_at', todayStart.toISOString());
-        if (todayError) throw todayError;
-        const { data: weekData, error: weekError } = await supabase
-            .from('tickets')
-            .select('ticket_id')
-            .gte('created_at', weekStart.toISOString());
-        if (weekError) throw weekError;
-        res.json({ today: todayData.length, week: weekData.length });
-    } catch (error) {
-        console.error('Error fetching ticket stats:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.get('/api/downtime', async (req, res) => {
-    try {
-        const { line, from, to } = req.query;
-        let query = supabase
-            .from('tickets')
-            .select('line, created_at, resolved_at')
-            .in('status', ['Open', 'Ongoing', 'Closed']);
+        if (ticket_id) query = query.ilike('ticket_id', `%${ticket_id}%`);
+        if (employee_id) query = query.ilike('employee_id', `%${employee_id}%`);
         if (line) query = query.eq('line', line);
-        if (from) query = query.gte('created_at', new Date(from).toISOString());
-        if (to) query = query.lte('created_at', new Date(to).toISOString());
-        const { data, error } = await query;
-        if (error) throw error;
-        const now = new Date();
-        const downtime = {};
-        data.forEach(ticket => {
-            const created = new Date(ticket.created_at);
-            const resolved = ticket.resolved_at ? new Date(ticket.resolved_at) : now;
-            const minutes = (resolved - created) / (1000 * 60);
-            downtime[ticket.line] = (downtime[ticket.line] || 0) + minutes;
-        });
-        const result = Object.keys(downtime).map(line => ({ line, downtime: Math.round(downtime[line]) }));
-        res.json(result);
-    } catch (error) {
-        console.error('Error fetching downtime:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
+        if (process) query = query.ilike('process', `%${process}%`);
+        if (description) query = query.ilike('description', `%${description}%`);
+        if (status) {
+            const statuses = status.split(',');
+            query = query.in('status', statuses);
+        }
 
-app.get('/api/downtime-by-process', async (req, res) => {
-    try {
-        const { line, from, to } = req.query;
-        let query = supabase.from('tickets').select('process, created_at, resolved_at').in('status', ['Open', 'Ongoing', 'Closed']);
-        if (line) query = query.eq('line', line);
-        if (from) query = query.gte('created_at', new Date(from).toISOString());
-        if (to) query = query.lte('created_at', new Date(to).toISOString());
-        const { data, error } = await query;
-        if (error) throw error;
-        const now = new Date();
-        const downtime = {};
-        data.forEach(ticket => {
-            const created = new Date(ticket.created_at);
-            const resolved = ticket.resolved_at ? new Date(ticket.resolved_at) : now;
-            const minutes = (resolved - created) / (1000 * 60);
-            downtime[ticket.process] = (downtime[ticket.process] || 0) + minutes;
-        });
-        const result = Object.keys(downtime).map(process => ({ process, downtime: Math.round(downtime[process]) }));
-        res.json(result);
-    } catch (error) {
-        console.error('Error fetching downtime by process:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
+        // Date filtering using Mexico City timezone (8 AM logic is handled by the utility)
+        if (from) {
+            const { startOfDay } = getDailyTimeRange(from); // This assumes 'from' is a date string like 'YYYY-MM-DD'
+            query = query.gte('created_at', startOfDay.toISO());
+        }
+        if (to) {
+            const { endOfDay } = getDailyTimeRange(to); // This assumes 'to' is a date string like 'YYYY-MM-DD'
+            query = query.lte('created_at', endOfDay.toISO());
+        }
 
-app.get('/api/tickets-by-process', async (req, res) => {
-    try {
-        const { line, from, to } = req.query;
-        let query = supabase.from('tickets').select('process');
-        if (line) query = query.eq('line', line);
-        if (from) query = query.gte('created_at', new Date(from).toISOString());
-        if (to) query = query.lte('created_at', new Date(to).toISOString());
-        const { data, error } = await query;
-        if (error) throw error;
-        const counts = {};
-        data.forEach(ticket => {
-            counts[ticket.process] = (counts[ticket.process] || 0) + 1;
-        });
-        const result = Object.keys(counts).map(process => ({ process, count: counts[process] }));
-        res.json(result);
-    } catch (error) {
-        console.error('Error fetching tickets by process:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
+        // Apply sorting
+        const sort_by = req.query.sort || 'created_at_desc';
+        if (sort_by === 'created_at_desc') {
+            query = query.order('created_at', { ascending: false });
+        } else if (sort_by === 'created_at_asc') {
+            query = query.order('created_at', { ascending: true });
+        }
+        // Add other sorting options as needed
 
-app.get('/api/technician-stats', async (req, res) => {
-    try {
-        const { line, from, to } = req.query;
-        let query = supabase
-            .from('tickets')
-            .select('resolved_by, assigned_to, created_at, assigned_at, resolved_at, status');
-        if (line) query = query.eq('line', line);
-        if (from) query = query.gte('created_at', new Date(from).toISOString());
-        if (to) query = query.lte('created_at', new Date(to).toISOString());
         const { data, error } = await query;
         if (error) throw error;
 
-        const stats = {};
-        const now = new Date();
-        data.forEach(ticket => {
-            const technician = ticket.resolved_by || ticket.assigned_to || 'Unassigned';
-            if (!stats[technician]) {
-                stats[technician] = { tickets_resolved: 0, total_resolve_time: 0, total_downtime: 0 };
-            }
-            if (ticket.status === 'Closed' && ticket.resolved_by) {
-                stats[technician].tickets_resolved += 1;
-                if (ticket.assigned_at && ticket.resolved_at) {
-                    const resolveTime = (new Date(ticket.resolved_at) - new Date(ticket.assigned_at)) / (1000 * 60);
-                    stats[technician].total_resolve_time += resolveTime;
-                }
-            }
-            if (ticket.assigned_to) {
-                const downtime = (ticket.resolved_at ? new Date(ticket.resolved_at) : now) - new Date(ticket.created_at);
-                stats[technician].total_downtime += downtime / (1000 * 60);
-            }
-        });
-
-        const result = Object.keys(stats).map(technician => ({
-            technician,
-            tickets_resolved: stats[technician].tickets_resolved,
-            total_resolve_time: stats[technician].total_resolve_time,
-            total_downtime: stats[technician].total_downtime
-        }));
-        res.json(result);
+        res.json(data);
     } catch (error) {
-        console.error('Error fetching technician stats:', error);
+        console.error('Error fetching tickets:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`Server running on port ${port}`));
+
+// Import and use routes from separate files
+app.put('/api/tickets/:ticketId/assign', require('./assign'));
+app.put('/api/tickets/:ticketId/resolve', require('./resolve'));
+app.get('/api/ticket-stats', require('./ticket-stats'));
+app.get('/api/downtime', require('./downtime'));
+app.get('/api/downtime-by-process', require('./downtime-by-process'));
+app.get('/api/tickets-by-process', require('./tickets-by-process'));
+app.get('/api/technician-stats', require('./technician-stats'));
+
+
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});

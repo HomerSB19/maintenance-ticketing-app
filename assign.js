@@ -1,47 +1,37 @@
-const { Pool } = require('pg');
-const jwt = require('jsonwebtoken');
+const { createClient } = require('@supabase/supabase-js');
+const { getCurrentMexicoCityTime } = require('./utils/time'); // Import the new utility
 
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
-});
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 module.exports = async (req, res) => {
     const ticketId = req.params.ticketId;
-    const { assigned_to, status, assigned_at } = req.body;
-    const authHeader = req.headers.authorization;
+    const { assigned_to } = req.body; // Only assigned_to is needed for assignment
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'Unauthorized: No token provided' });
+    if (!assigned_to) {
+        return res.status(400).json({ error: 'Technician name is required.' });
     }
 
-    const token = authHeader.split(' ')[1];
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const allowedRoles = ['Manager', 'Maintenance Technician', 'Test Technician'];
-        if (!allowedRoles.includes(decoded.role)) {
-            return res.status(403).json({ error: 'Forbidden: Insufficient role permissions' });
+        const assigned_at = getCurrentMexicoCityTime().toISO(); // Get current Mexico City time
+
+        const { data, error } = await supabase
+            .from('tickets')
+            .update({ assigned_to: assigned_to, status: 'Ongoing', assigned_at: assigned_at })
+            .eq('ticket_id', ticketId)
+            .in('status', ['Open']) // Only allow assignment if status is 'Open'
+            .select(); // Select the updated row to check if anything was updated
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+            res.status(200).json({ message: 'Ticket assigned successfully.', ticket: data[0] });
+        } else {
+            res.status(404).json({ error: 'Ticket not found or already assigned/resolved.' });
         }
-
-        if (!ticketId || !assigned_to || !status || !assigned_at) {
-            return res.status(400).json({ error: 'Missing required fields' });
-        }
-
-        const result = await pool.query(
-            'UPDATE tickets SET assigned_to = $1, status = $2, assigned_at = $3 WHERE ticket_id = $4 RETURNING *',
-            [assigned_to, status, assigned_at, ticketId]
-        );
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Ticket not found' });
-        }
-
-        res.json(result.rows[0]);
     } catch (error) {
         console.error('Error assigning ticket:', error);
-        if (error.name === 'JsonWebTokenError') {
-            return res.status(401).json({ error: 'Unauthorized: Invalid token' });
-        }
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 };

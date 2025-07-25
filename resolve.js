@@ -1,47 +1,75 @@
-const { Pool } = require('pg');
-const jwt = require('jsonwebtoken');
+const { createClient } = require('@supabase/supabase-js');
+const { DateTime } = require('luxon'); // Already used by time.js, but good to explicitly include if needed
+const { getCurrentMexicoCityTime, MEXICO_CITY_TIMEZONE } = require('./utils/time'); // Import the new utility
 
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
-});
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 module.exports = async (req, res) => {
     const ticketId = req.params.ticketId;
-    const { issue, fix, status, resolved_by, resolved_at } = req.body;
-    const authHeader = req.headers.authorization;
+    const { issue, fix } = req.body; // status, resolved_by are derived or set by the backend
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'Unauthorized: No token provided' });
+    if (!issue || !fix) {
+        return res.status(400).json({ error: 'Issue and Fix descriptions are required.' });
     }
 
-    const token = authHeader.split(' ')[1];
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const allowedRoles = ['Manager', 'Maintenance Technician', 'Test Technician'];
-        if (!allowedRoles.includes(decoded.role)) {
-            return res.status(403).json({ error: 'Forbidden: Insufficient role permissions' });
+        // First, fetch the ticket to get created_at and assigned_to
+        const { data: ticket, error: fetchError } = await supabase
+            .from('tickets')
+            .select('created_at, assigned_at, assigned_to, status')
+            .eq('ticket_id', ticketId)
+            .single();
+
+        if (fetchError) throw fetchError;
+        if (!ticket) {
+            return res.status(404).json({ error: 'Ticket not found.' });
+        }
+        if (ticket.status !== 'Ongoing') {
+            return res.status(400).json({ error: 'Ticket is not in "Ongoing" status.' });
         }
 
-        if (!ticketId || !issue || !fix || !status || !resolved_by || !resolved_at) {
-            return res.status(400).json({ error: 'Missing required fields' });
+        const resolved_at = getCurrentMexicoCityTime();
+        let downtime_minutes = 0;
+
+        if (ticket.created_at) {
+            // Parse created_at string into a Luxon DateTime object, assuming it's an ISO string in Mexico City TZ
+            const created_dt = DateTime.fromISO(ticket.created_at, { zone: MEXICO_CITY_TIMEZONE });
+
+            if (created_dt.isValid && resolved_at.isValid) {
+                const diff = resolved_at.diff(created_dt, 'minutes').toObject();
+                downtime_minutes = Math.max(0, Math.round(diff.minutes || 0)); // Ensure non-negative and round
+            } else {
+                console.warn(`Invalid date for downtime calculation for ticket ${ticketId}: created_at=${ticket.created_at}, resolved_at=${resolved_at.toISO()}`);
+            }
         }
 
-        const result = await pool.query(
-            'UPDATE tickets SET issue = $1, fix = $2, status = $3, resolved_by = $4, resolved_at = $5 WHERE ticket_id = $6 RETURNING *',
-            [issue, fix, status, resolved_by, resolved_at, ticketId]
-        );
+        const resolved_by = ticket.assigned_to || 'Unknown'; // Use assigned_to if available, otherwise 'Unknown'
 
-        if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Ticket not found' });
+        const { data, error } = await supabase
+            .from('tickets')
+            .update({
+                issue: issue,
+                fix: fix,
+                status: 'Closed',
+                resolved_by: resolved_by,
+                resolved_at: resolved_at.toISO(), // Store as ISO string
+                downtime_minutes: downtime_minutes
+            })
+            .eq('ticket_id', ticketId)
+            .in('status', ['Ongoing']) // Only allow resolution if status is 'Ongoing'
+            .select(); // Select the updated row to check if anything was updated
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+            res.status(200).json({ message: 'Ticket resolved successfully.', ticket: data[0] });
+        } else {
+            res.status(404).json({ error: 'Ticket not found or not in "Ongoing" status.' });
         }
-
-        res.json(result.rows[0]);
     } catch (error) {
         console.error('Error resolving ticket:', error);
-        if (error.name === 'JsonWebTokenError') {
-            return res.status(401).json({ error: 'Unauthorized: Invalid token' });
-        }
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 };

@@ -95,7 +95,7 @@
                     <p class="text-gray-800 text-sm">Ongoing: <span id="mrr-ongoing">0</span></p>
                 </div>
                 <div id="idb-box" class="p-4 rounded-lg shadow-md text-center cursor-pointer" onclick="loadLineTickets('IDB')">
-                    <h3 class="text-lg font-bold text-gray-800">IDB</h3>
+                    <h3 class="p-2 text-gray-800 text-sm">IDB</h3>
                     <p class="p-2 text-gray-800 text-sm">Open: <span id="idb-open">0</span></p>
                     <p class="p-2 text-gray-800 text-sm">Ongoing: <span id="idb-ongoing">0</span></p>
                 </div>
@@ -132,7 +132,6 @@
                         <thead>
                             <tr class="bg-gray-200">
                                 <th class="p-2 text-left text-gray-700">Line</th>
-                                <th class="p-2 text-left text-gray-700">Open Tickets</th>
                                 <th class="p-2 text-left text-gray-700">Tickets Generated</th>
                                 <th class="p-2 text-left text-gray-700">Downtime (Minutes)</th>
                             </tr>
@@ -400,6 +399,8 @@
                 const now = new Date(getMexicoCityDate());
                 const hours = now.getHours();
                 const currentDay = now.toLocaleDateString('en-US', { timeZone: 'America/Mexico_City' });
+                // Reset at 8 AM Mexico City time. If current time is past 8 AM
+                // and the last reset day is not today, it's a new "day" for stats.
                 if (hours >= 8 && lastResetDay !== currentDay) {
                     lastResetDay = currentDay;
                     return true;
@@ -636,10 +637,10 @@
                     document.getElementById('line').value = '';
                     document.getElementById('operation').innerHTML = '<option value="">Select Operation</option>';
                     document.getElementById('description').value = '';
-                    await fetchTicketData();
+                    await fetchTicketData(); // Refetch data after submission
                     console.log('submitTicket: Forcing dashboard update');
-                    loadDashboard();
-                    showScreen('dashboard');
+                    loadDashboard(); // Update dashboard with new data
+                    showScreen('dashboard'); // Navigate to dashboard
                     alert('Ticket submitted successfully');
                 } catch (error) {
                     console.error('submitTicket: Error', error);
@@ -665,6 +666,7 @@
                 alarm.currentTime = 0;
                 isTestAlarmPlaying = false;
                 console.log('stopAlarm: Alarm stopped, timestamp:', getMexicoCityDate());
+                // Only restart the interval if it's currently null (meaning it was cleared)
                 if (!alarmInterval) {
                     console.log('stopAlarm: Restarting polling interval (5s), timestamp:', getMexicoCityDate());
                     alarmInterval = setInterval(checkForAlarms, 5000);
@@ -683,7 +685,7 @@
                         showErrorNotification('Failed to play alarm. Ensure /beep-01a.mp3 is accessible.');
                     });
                     isTestAlarmPlaying = true;
-                    hasUserInteracted = true;
+                    hasUserInteracted = true; // Assume user interaction if they click test alarm
                     testAlarmBtn.textContent = 'Stop Alarm';
                     console.log('testAlarm: Playing test alarm, timestamp:', getMexicoCityDate());
                 }
@@ -695,16 +697,18 @@
                     lastFetchFailed = true;
                     return false;
                 }
+                // Check if it's a new "day" (after 8 AM local time) to reset daily stats
                 if (isNewDay()) {
                     console.log('fetchTicketData: New day detected, resetting today stats and downtime, timestamp:', getMexicoCityDate());
-                    cachedStats.today = 0;
-                    cachedDowntime = [];
+                    cachedStats.today = 0; // Reset today's count
+                    cachedDowntime = []; // Clear downtime data for the new day
                     lastResetDay = new Date(getMexicoCityDate()).toLocaleDateString('en-US', { timeZone: 'America/Mexico_City' });
                 }
                 const maxAttempts = 5;
                 for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                     try {
                         console.log(`fetchTicketData: Attempt ${attempt}/${maxAttempts}, timestamp: ${getMexicoCityDate()}`);
+                        // Add cache-busting parameter to all requests
                         const cacheBuster = `cb=${Date.now()}-${Math.random().toString(36).substring(2)}`;
                         const ticketUrl = `/api/tickets?${cacheBuster}&timezone=America/Mexico_City`;
                         console.log('fetchTicketData: Fetching tickets', ticketUrl);
@@ -723,7 +727,7 @@
                         const tickets = await ticketResponse.json();
                         console.log('fetchTicketData: Tickets received', tickets.length, 'tickets', JSON.stringify(tickets.slice(0, 2)));
 
-                        console.log('fetchTicketData: Fetching stats', cacheBuster);
+                        console.log('fetchTicketData: Fetching stats', statsUrl);
                         const statsUrl = `/api/ticket-stats?${cacheBuster}&timezone=America/Mexico_City`;
                         const statsResponse = await fetch(statsUrl, {
                             headers: { 
@@ -739,12 +743,13 @@
                         }
                         cachedStats = await statsResponse.json();
                         console.log('fetchTicketData: Stats received', JSON.stringify(cachedStats));
+                        // Ensure 'today' is a valid number, default to 0 if not
                         if (typeof cachedStats.today === 'undefined' || cachedStats.today === null || cachedStats.today < 0) {
                             console.warn('fetchTicketData: stats.today is invalid, defaulting to 0', cachedStats.today);
                             cachedStats.today = 0;
                         }
 
-                        console.log('fetchTicketData: Fetching downtime', cacheBuster);
+                        console.log('fetchTicketData: Fetching downtime', downtimeUrl);
                         const downtimeUrl = `/api/downtime?${cacheBuster}&timezone=America/Mexico_City`;
                         const downtimeResponse = await fetch(downtimeUrl, {
                             headers: { 
@@ -761,17 +766,17 @@
                         cachedDowntime = await downtimeResponse.json();
                         console.log('fetchTicketData: Downtime received', JSON.stringify(cachedDowntime));
 
-                        cachedTickets = tickets;
-                        lastFetchFailed = false;
+                        cachedTickets = tickets; // Update cached tickets from the /api/tickets endpoint
+                        lastFetchFailed = false; // Reset flag on success
                         console.log('fetchTicketData: Success, ticket count:', tickets.length);
-                        return true;
+                        return true; // Indicate success
                     } catch (error) {
                         console.error(`fetchTicketData: Attempt ${attempt}/${maxAttempts} failed`, error);
                         if (attempt === maxAttempts) {
-                            lastFetchFailed = true;
+                            lastFetchFailed = true; // Set flag if all attempts fail
                             console.error('fetchTicketData: All attempts failed', error);
                             showErrorNotification(`Failed to fetch data after ${maxAttempts} attempts: ${error.message}`);
-                            return false;
+                            return false; // Indicate failure
                         }
                         const backoff = Math.pow(2, attempt) * 1000; // Exponential backoff: 1s, 2s, 4s, 8s, 16s
                         console.log(`fetchTicketData: Waiting ${backoff}ms before retry`);
@@ -783,17 +788,18 @@
             async function checkForAlarms() {
                 if (!accessToken) {
                     console.log('checkForAlarms: No access token, skipping, timestamp:', getMexicoCityDate());
-                    lastFetchFailed = true;
+                    lastFetchFailed = true; // Consider no token as a "failed" state for continuous operation
                     return;
                 }
                 try {
+                    // Only force a refetch if the last one failed, otherwise use cached data for polling
                     if (lastFetchFailed) {
                         console.warn('checkForAlarms: Previous fetch failed, forcing refresh, timestamp:', getMexicoCityDate());
                     }
                     const success = await fetchTicketData();
                     if (!success) {
                         console.error('checkForAlarms: Fetch failed, timestamp:', getMexicoCityDate());
-                        lastFetchFailed = true;
+                        lastFetchFailed = true; // Ensure flag is set if fetchTicketData reports failure
                         return;
                     }
 
@@ -801,23 +807,23 @@
                     console.log('checkForAlarms: Open tickets', openTickets.length, 'timestamp:', getMexicoCityDate());
 
                     const now = new Date(getMexicoCityDate());
-                    const threeMinutesAgo = new Date(now.getTime() - 3 * 60 * 1000);
+                    const threeMinutesAgo = new Date(now.getTime() - 3 * 60 * 1000); // 3 minutes for alert
                     const overdueTickets = openTickets.filter(ticket => new Date(ticket.created_at).getTime() < threeMinutesAgo.getTime());
                     console.log('checkForAlarms: Overdue tickets', overdueTickets.length, 'timestamp:', getMexicoCityDate());
 
                     if (overdueTickets.length > 0 && !isTestAlarmPlaying) {
                         console.log('checkForAlarms: Starting alarm for overdue tickets, timestamp:', getMexicoCityDate());
                         startAlarm();
-                    } else if (!isTestAlarmPlaying) {
+                    } else if (!isTestAlarmPlaying) { // Stop alarm only if no overdue tickets AND not in test mode
                         console.log('checkForAlarms: Stopping alarm, timestamp:', getMexicoCityDate());
                         stopAlarm();
                     }
 
                     console.log('checkForAlarms: Updating dashboard, timestamp:', getMexicoCityDate());
-                    loadDashboard();
+                    loadDashboard(); // Always update dashboard with the latest cached data
                 } catch (error) {
                     console.error('checkForAlarms: Error', error, 'timestamp:', getMexicoCityDate());
-                    lastFetchFailed = true;
+                    lastFetchFailed = true; // Set flag if an error occurs during checking
                     showErrorNotification(`Error in checkForAlarms: ${error.message}`);
                 }
             }
@@ -843,6 +849,7 @@
                         const openTickets = tickets.filter(t => t.line === line && t.status === 'Open').length;
                         const ongoingTickets = tickets.filter(t => t.line === line && t.status === 'Ongoing').length;
                         const box = document.getElementById(`${line.toLowerCase()}-box`);
+                        // Reset classes before adding new ones
                         box.classList.remove('flash-red', 'flash-yellow', 'bg-green-200');
                         if (openTickets > 0) {
                             box.classList.add('flash-red');
@@ -856,24 +863,23 @@
                         console.log(`loadDashboard: Updated ${line} - Open: ${openTickets}, Ongoing: ${ongoingTickets}`);
                     });
 
+                    // Safely get today's ticket count
                     const safeTicketsToday = typeof stats.today === 'undefined' || stats.today === null || stats.today < 0 ? 0 : stats.today;
                     if (typeof stats.today === 'undefined' || stats.today === null || stats.today < 0) {
                         console.warn('loadDashboard: stats.today is invalid, defaulting to 0', stats.today);
                     }
                     document.getElementById('tickets-today').textContent = safeTicketsToday;
-                    document.getElementById('tickets-week').textContent = stats.week || 0;
+                    document.getElementById('tickets-week').textContent = stats.week || 0; // Display 0 if stats.week is undefined/null
 
                     const downtimeTable = document.getElementById('downtime-table');
-                    downtimeTable.innerHTML = '';
-                    downtimeData.forEach(({ line, open_tickets, tickets_generated, downtime }) => {
-                        const safeOpenTickets = typeof open_tickets === 'undefined' || open_tickets === null || open_tickets < 0 ? 0 : open_tickets;
+                    downtimeTable.innerHTML = ''; // Clear existing rows
+                    downtimeData.forEach(({ line, tickets_generated, downtime }) => {
+                        // Ensure tickets_generated and downtime are valid numbers
                         const safeTicketsGenerated = typeof tickets_generated === 'undefined' || tickets_generated === null || tickets_generated < 0 ? 0 : tickets_generated;
-                        const safeDowntime = typeof downtime === 'number' && downtime >= 0 ? downtime : 0;
+                        const safeDowntime = typeof downtime === 'number' && downtime >= 0 ? downtime : 0; // Ensure downtime is non-negative
+                        
                         if (typeof tickets_generated === 'undefined' || tickets_generated === null || tickets_generated < 0) {
                             console.warn(`loadDashboard: tickets_generated is invalid for line ${line}, defaulting to 0`, tickets_generated);
-                        }
-                        if (typeof open_tickets === 'undefined' || open_tickets === null || open_tickets < 0) {
-                            console.warn(`loadDashboard: open_tickets is invalid for line ${line}, defaulting to 0`, open_tickets);
                         }
                         if (typeof downtime === 'number' && downtime < 0) {
                             console.warn(`loadDashboard: Negative downtime (${downtime}) detected for line ${line}, defaulting to 0`);
@@ -882,7 +888,6 @@
                         row.className = 'hover:bg-gray-50';
                         row.innerHTML = `
                             <td class="p-2">${line}</td>
-                            <td class="p-2">${safeOpenTickets}</td>
                             <td class="p-2">${safeTicketsGenerated}</td>
                             <td class="p-2">${safeDowntime}</td>
                         `;
@@ -897,7 +902,7 @@
 
             async function loadAllTickets() {
                 const ticketList = document.getElementById('ticket-list');
-                ticketList.innerHTML = '';
+                ticketList.innerHTML = ''; // Clear existing list
                 try {
                     const ticketIdFilter = document.getElementById('filter-ticket-id').value;
                     const employeeIdFilter = document.getElementById('filter-employee-id').value;
@@ -917,6 +922,7 @@
                     if (statusFilter) queryParams.push(`status=${encodeURIComponent(statusFilter)}`);
                     if (fromDate) queryParams.push(`from=${encodeURIComponent(fromDate)}`);
                     if (toDate) queryParams.push(`to=${encodeURIComponent(toDate)}`);
+                    // Add cache-busting for filter changes to ensure fresh data
                     queryParams.push(`cb=${Date.now()}-${Math.random().toString(36).substring(2)}`);
 
                     const url = `/api/tickets?${queryParams.join('&')}`;
@@ -1000,6 +1006,7 @@
             async function loadLineTickets(line) {
                 console.log('loadLineTickets called with:', { line, timestamp: getMexicoCityDate() });
                 try {
+                    // Fetch all open and ongoing tickets, then filter by line on the frontend
                     const url = `/api/tickets?status=Open,Ongoing&cb=${Date.now()}-${Math.random().toString(36).substring(2)}&timezone=America/Mexico_City`;
                     console.log('loadLineTickets: Fetching', url, 'timestamp:', getMexicoCityDate());
                     const response = await fetch(url, {
@@ -1016,7 +1023,7 @@
                     console.log('loadLineTickets: Received', lineTickets.length, 'tickets for', line, 'timestamp:', getMexicoCityDate());
                     document.getElementById('line-title').textContent = line;
                     const content = document.getElementById('line-tickets-content');
-                    content.innerHTML = '';
+                    content.innerHTML = ''; // Clear previous content
                     if (lineTickets.length === 0) {
                         content.innerHTML = '<p class="text-gray-600">No Open or Ongoing tickets for this line.</p>';
                     } else {
@@ -1026,6 +1033,7 @@
                             let buttons = `
                                 <button class="details-btn px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm" data-ticket-id="${ticket.ticket_id}">Details</button>
                             `;
+                            // Only show assign/resolve buttons if user has appropriate role
                             if (['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser?.role)) {
                                 if (ticket.status === 'Open') {
                                     buttons += `<button class="assign-btn px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm" data-ticket-id="${ticket.ticket_id}" data-status="Open">Assign</button>`;
@@ -1043,7 +1051,8 @@
                             content.appendChild(ticketDiv);
                         });
                     }
-                    showModal('line-tickets-modal', null, line);
+                    showModal('line-tickets-modal', null, line); // Open the modal
+                    // Add event listener to the content for delegated clicks
                     content.addEventListener('click', (event) => {
                         const target = event.target;
                         if (target.classList.contains('details-btn')) {
@@ -1075,7 +1084,7 @@
                     showErrorNotification('Error: No ticket selected');
                     return;
                 }
-                currentTicketId = ticketId;
+                currentTicketId = ticketId; // Set the global currentTicketId for modal actions
                 console.log('handleStatusClick: Set currentTicketId:', currentTicketId, 'timestamp:', getMexicoCityDate());
                 if (status === 'Open' && ['Manager', 'Maintenance Technician', 'Test Technician'].includes(currentUser?.role)) {
                     showModal('assign-ticket-modal', ticketId);
@@ -1114,11 +1123,11 @@
                     }
                     console.log('assignTicket: Success, timestamp:', getMexicoCityDate());
                     closeModal('assign-ticket-modal');
-                    if (currentLine) loadLineTickets(currentLine);
-                    loadAllTickets();
-                    await fetchTicketData();
+                    if (currentLine) loadLineTickets(currentLine); // Reload line-specific tickets if applicable
+                    loadAllTickets(); // Reload all tickets to reflect status change
+                    await fetchTicketData(); // Refetch global data
                     console.log('assignTicket: Forcing dashboard update, timestamp:', getMexicoCityDate());
-                    loadDashboard();
+                    loadDashboard(); // Update dashboard
                     alert('Ticket assigned successfully');
                 } catch (error) {
                     console.error('assignTicket: Error', error, 'timestamp:', getMexicoCityDate());
@@ -1139,6 +1148,7 @@
                     return;
                 }
                 try {
+                    // Fetch the ticket first to get the assigned_to name for resolved_by
                     const ticketUrl = `/api/tickets/${currentTicketId}?cb=${Date.now()}-${Math.random().toString(36).substring(2)}&timezone=America/Mexico_City`;
                     console.log('resolveTicket: Fetching ticket', ticketUrl, 'timestamp:', getMexicoCityDate());
                     const ticketResponse = await fetch(ticketUrl, {
@@ -1151,7 +1161,8 @@
                     });
                     if (!ticketResponse.ok) throw new Error(`HTTP ${ticketResponse.status}: ${await ticketResponse.text()}`);
                     const ticket = await ticketResponse.json();
-                    const resolvedBy = ticket.assigned_to || 'Unknown';
+                    const resolvedBy = ticket.assigned_to || 'Unknown'; // Use assigned_to as resolved_by
+
                     console.log('resolveTicket: Resolving ticket', { ticketId: currentTicketId, issue, fix, resolvedBy }, 'timestamp:', getMexicoCityDate());
                     const response = await fetch(`/api/tickets/${currentTicketId}/resolve`, {
                         method: 'PUT',
@@ -1170,11 +1181,11 @@
                     }
                     console.log('resolveTicket: Success, timestamp:', getMexicoCityDate());
                     closeModal('resolve-ticket-modal');
-                    if (currentLine) loadLineTickets(currentLine);
-                    loadAllTickets();
-                    await fetchTicketData();
+                    if (currentLine) loadLineTickets(currentLine); // Reload line-specific tickets if applicable
+                    loadAllTickets(); // Reload all tickets to reflect status change
+                    await fetchTicketData(); // Refetch global data
                     console.log('resolveTicket: Forcing dashboard update, timestamp:', getMexicoCityDate());
-                    loadDashboard();
+                    loadDashboard(); // Update dashboard
                     alert('Ticket resolved successfully');
                 } catch (error) {
                     console.error('resolveTicket: Error', error, 'timestamp:', getMexicoCityDate());
@@ -1188,7 +1199,7 @@
                     const type = document.getElementById('analytics-type').value;
                     const fromDate = document.getElementById('from-date').value;
                     const toDate = document.getElementById('to-date').value;
-                    if (!line || !type) return;
+                    if (!line || !type) return; // Don't proceed without selected line and type
 
                     const baseUrl = `/api/${type === 'downtime' ? 'downtime-by-process' : 'tickets-by-process'}`;
                     const queryParams = [`line=${encodeURIComponent(line)}`, `cb=${Date.now()}-${Math.random().toString(36).substring(2)}`, `timezone=America/Mexico_City`];
@@ -1207,17 +1218,18 @@
                     if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
                     let data = await response.json();
                     console.log('loadAnalytics: Data received', data.length, 'items', 'timestamp:', getMexicoCityDate());
+                    // Filter out items with zero value and sort
                     data = data.filter(item => (type === 'downtime' ? item.downtime : item.count) > 0)
                         .sort((a, b) => {
                             const valueA = type === 'downtime' ? a.downtime : a.count;
                             const valueB = type === 'downtime' ? b.downtime : b.count;
-                            return valueB - valueA || a.process.localeCompare(b.process);
+                            return valueB - valueA || a.process.localeCompare(b.process); // Sort by value desc, then by process name asc
                         });
 
                     const labels = data.map(item => item.process);
                     const values = data.map(item => type === 'downtime' ? item.downtime : item.count);
 
-                    if (chartInstance) chartInstance.destroy();
+                    if (chartInstance) chartInstance.destroy(); // Destroy previous chart instance
                     const ctx = document.getElementById('analytics-chart').getContext('2d');
                     chartInstance = new Chart(ctx, {
                         type: 'bar',
@@ -1258,7 +1270,7 @@
                         }
                     });
 
-                    updateTechnicianTable();
+                    updateTechnicianTable(); // Update technician performance table as well
                 } catch (error) {
                     console.error('loadAnalytics: Error', error, 'timestamp:', getMexicoCityDate());
                     showErrorNotification(`Failed to load analytics: ${error.message}`);
@@ -1289,7 +1301,7 @@
                     const data = await response.json();
                     console.log('updateTechnicianTable: Data received', data.length, 'items', 'timestamp:', getMexicoCityDate());
                     const tbody = document.getElementById('technician-table');
-                    tbody.innerHTML = '';
+                    tbody.innerHTML = ''; // Clear existing rows
                     data.forEach(item => {
                         const tr = document.createElement('tr');
                         tr.innerHTML = `
@@ -1328,7 +1340,7 @@
                             const { role, email } = await response.json();
                             currentUser = { role, email };
                             console.log('init: Token valid, user:', email, 'role:', role, 'timestamp:', getMexicoCityDate());
-                            await fetchTicketData();
+                            await fetchTicketData(); // Fetch initial data immediately after successful login
                         } else {
                             console.warn('init: Invalid access token, clearing, timestamp:', getMexicoCityDate());
                             localStorage.removeItem('accessToken');
@@ -1336,20 +1348,21 @@
                         }
                     }
                     updateUIForRole();
-                    showScreen('dashboard');
+                    showScreen('dashboard'); // Always show dashboard on init
+                    // Start the alarm polling only once
                     if (!alarmInterval) {
                         console.log('init: Starting polling interval (5s), timestamp:', getMexicoCityDate());
-                        alarmInterval = setInterval(checkForAlarms, 5000);
+                        alarmInterval = setInterval(checkForAlarms, 5000); // Poll every 5 seconds
                     }
                 } catch (error) {
                     console.error('init: Error', error, 'timestamp:', getMexicoCityDate());
-                    updateUIForRole();
-                    showScreen('dashboard');
+                    updateUIForRole(); // Still try to update UI even if init fetch fails
+                    showScreen('dashboard'); // Still show dashboard
                     showErrorNotification(`Initialization failed: ${error.message}`);
                 }
             }
 
-            init();
+            init(); // Call init when the script loads
         </script>
     </body>
 </html>
