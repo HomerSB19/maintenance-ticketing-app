@@ -1,6 +1,5 @@
-// downtime.js
 const { createClient } = require('@supabase/supabase-js');
-const { getDailyTimeRange } = require('./utils/time'); // Import the new utility
+const { getDailyTimeRange } = require('./utils/time');
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
@@ -8,51 +7,56 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 module.exports = async (req, res) => {
     try {
-        // Determine the start and end of the current 8 AM to 8 AM period
+        // Get the current 8 AM to 8 AM time window
         const { startOfDay, endOfDay } = getDailyTimeRange();
 
-        // Fetch all unique lines
-        const { data: linesData, error: linesError } = await supabase
+        // Query 1: Get all tickets created within the time window
+        const { data: createdTickets, error: createdError } = await supabase
             .from('tickets')
-            .select('line', { distinct: true });
+            .select('line')
+            .gte('created_at', startOfDay.toISO())
+            .lt('created_at', endOfDay.toISO());
 
-        if (linesError) throw linesError;
+        if (createdError) throw createdError;
 
-        const lines = linesData.map(row => row.line);
-        const downtimeData = [];
+        // Query 2: Get all tickets closed within the time window to sum their downtime
+        const { data: closedTickets, error: closedError } = await supabase
+            .from('tickets')
+            .select('line, downtime_minutes')
+            .eq('status', 'Closed')
+            .gte('resolved_at', startOfDay.toISO())
+            .lt('resolved_at', endOfDay.toISO());
 
-        for (const line of lines) {
-            // Get total downtime for resolved tickets for this line within the period
-            const { data: downtimeResult, error: downtimeError } = await supabase
-                .from('tickets')
-                .select('downtime_minutes')
-                .eq('line', line)
-                .eq('status', 'Closed')
-                .gte('resolved_at', startOfDay.toISO())
-                .lt('resolved_at', endOfDay.toISO());
+        if (closedError) throw closedError;
 
-            if (downtimeError) throw downtimeError;
+        // Aggregate the data in JavaScript
+        const aggregation = {};
 
-            const totalDowntime = downtimeResult.reduce((sum, ticket) => sum + (ticket.downtime_minutes || 0), 0);
-
-            // Get tickets generated for this line within the period
-            const { count: ticketsGenerated, error: ticketsGeneratedError } = await supabase
-                .from('tickets')
-                .select('*', { count: 'exact', head: true })
-                .eq('line', line)
-                .gte('created_at', startOfDay.toISO())
-                .lt('created_at', endOfDay.toISO());
-
-            if (ticketsGeneratedError) throw ticketsGeneratedError;
-
-            downtimeData.push({
-                line: line,
-                tickets_generated: ticketsGenerated,
-                downtime: totalDowntime
-            });
+        // Count tickets generated per line
+        for (const ticket of createdTickets) {
+            if (!aggregation[ticket.line]) {
+                aggregation[ticket.line] = { tickets_generated: 0, downtime: 0 };
+            }
+            aggregation[ticket.line].tickets_generated += 1;
         }
 
-        res.status(200).json(downtimeData);
+        // Sum the downtime per line
+        for (const ticket of closedTickets) {
+            if (!aggregation[ticket.line]) {
+                aggregation[ticket.line] = { tickets_generated: 0, downtime: 0 };
+            }
+            aggregation[ticket.line].downtime += ticket.downtime_minutes || 0;
+        }
+
+        // Convert the aggregated object into the final array format
+        const result = Object.entries(aggregation).map(([line, data]) => ({
+            line: line,
+            tickets_generated: data.tickets_generated,
+            downtime: data.downtime
+        }));
+
+        res.status(200).json(result);
+
     } catch (error) {
         console.error('Error fetching downtime data:', error);
         res.status(500).json({ error: error.message });
