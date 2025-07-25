@@ -2,7 +2,27 @@ const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 const dotenv = require('dotenv');
-const { getCurrentMexicoCityTime } = require('./utils/time'); // Import the new utility
+
+// --- START: TEMPORARY DEBUGGING CODE ---
+const fs = require('fs');
+const path = require('path');
+
+try {
+  console.log('---- STARTING DIRECTORY DEBUG ----');
+  const rootDir = fs.readdirSync(__dirname);
+  console.log('Files in root directory:', rootDir);
+  
+  const utilsPath = path.join(__dirname, 'utils');
+  const utilsDir = fs.readdirSync(utilsPath);
+  console.log('Files in utils directory:', utilsDir);
+  console.log('---- ENDING DIRECTORY DEBUG ----');
+} catch (error) {
+  console.error('!!! DEBUG ERROR READING DIRECTORIES !!!:', error);
+}
+// --- END: TEMPORARY DEBUGGING CODE ---
+
+
+const { getCurrentMexicoCityTime } = require('./utils/time'); // This line stays
 
 dotenv.config();
 const app = express();
