@@ -2,27 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 const dotenv = require('dotenv');
-
-// --- START: TEMPORARY DEBUGGING CODE ---
-const fs = require('fs');
-const path = require('path');
-
-try {
-  console.log('---- STARTING DIRECTORY DEBUG ----');
-  const rootDir = fs.readdirSync(__dirname);
-  console.log('Files in root directory:', rootDir);
-  
-  const utilsPath = path.join(__dirname, 'utils');
-  const utilsDir = fs.readdirSync(utilsPath);
-  console.log('Files in utils directory:', utilsDir);
-  console.log('---- ENDING DIRECTORY DEBUG ----');
-} catch (error) {
-  console.error('!!! DEBUG ERROR READING DIRECTORIES !!!:', error);
-}
-// --- END: TEMPORARY DEBUGGING CODE ---
-
-
-const { getCurrentMexicoCityTime } = require('./utils/time'); // This line stays
+const { getCurrentMexicoCityTime } = require('./utils/time');
 
 dotenv.config();
 const app = express();
@@ -94,7 +74,6 @@ app.get('/api/user', async (req, res) => {
 app.post('/api/tickets', async (req, res) => {
     const { employee_id, name, line, process, description } = req.body;
     try {
-        // Set created_at to current Mexico City time ISO string
         const created_at = getCurrentMexicoCityTime().toISO();
         const { data, error } = await supabase
             .from('tickets')
@@ -123,7 +102,8 @@ app.get('/api/tickets/:ticket_id', async (req, res) => {
 
         if (error) throw error;
         res.json(data);
-    } catch (error) {
+    } catch (error)
+    {
         console.error('Error fetching ticket:', error);
         res.status(500).json({ error: error.message });
     }
@@ -134,7 +114,6 @@ app.get('/api/tickets', async (req, res) => {
     try {
         let query = supabase.from('tickets').select('*');
 
-        // Apply filters from query parameters
         const { ticket_id, employee_id, line, process, description, status, from, to } = req.query;
 
         if (ticket_id) query = query.ilike('ticket_id', `%${ticket_id}%`);
@@ -147,24 +126,21 @@ app.get('/api/tickets', async (req, res) => {
             query = query.in('status', statuses);
         }
 
-        // Date filtering using Mexico City timezone (8 AM logic is handled by the utility)
         if (from) {
-            const { startOfDay } = getDailyTimeRange(from); // This assumes 'from' is a date string like 'YYYY-MM-DD'
+            const { startOfDay } = getDailyTimeRange(from);
             query = query.gte('created_at', startOfDay.toISO());
         }
         if (to) {
-            const { endOfDay } = getDailyTimeRange(to); // This assumes 'to' is a date string like 'YYYY-MM-DD'
+            const { endOfDay } = getDailyTimeRange(to);
             query = query.lte('created_at', endOfDay.toISO());
         }
 
-        // Apply sorting
         const sort_by = req.query.sort || 'created_at_desc';
         if (sort_by === 'created_at_desc') {
             query = query.order('created_at', { ascending: false });
         } else if (sort_by === 'created_at_asc') {
             query = query.order('created_at', { ascending: true });
         }
-        // Add other sorting options as needed
 
         const { data, error } = await query;
         if (error) throw error;
@@ -184,7 +160,8 @@ app.get('/api/ticket-stats', require('./ticket-stats'));
 app.get('/api/downtime', require('./downtime'));
 app.get('/api/downtime-by-process', require('./downtime-by-process'));
 app.get('/api/tickets-by-process', require('./tickets-by-process'));
-app.get('/api/technician-stats', require('./technician-stats'));
+// The next line is commented out because the file is missing
+// app.get('/api/technician-stats', require('./technician-stats'));
 
 
 const PORT = process.env.PORT || 3001;
