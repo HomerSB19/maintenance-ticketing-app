@@ -10,42 +10,31 @@ module.exports = async (req, res) => {
         // Get the current 8 AM to 8 AM time window
         const { startOfDay, endOfDay } = getDailyTimeRange();
 
-        // Query 1: Get all tickets created within the time window
-        const { data: createdTickets, error: createdError } = await supabase
+        // Get all tickets CREATED within the time window
+        const { data: tickets, error } = await supabase
             .from('tickets')
-            .select('line')
+            .select('line, status, downtime_minutes')
             .gte('created_at', startOfDay.toISO())
             .lt('created_at', endOfDay.toISO());
 
-        if (createdError) throw createdError;
-
-        // Query 2: Get all tickets closed within the time window to sum their downtime
-        const { data: closedTickets, error: closedError } = await supabase
-            .from('tickets')
-            .select('line, downtime_minutes')
-            .eq('status', 'Closed')
-            .gte('resolved_at', startOfDay.toISO())
-            .lt('resolved_at', endOfDay.toISO());
-
-        if (closedError) throw closedError;
+        if (error) throw error;
 
         // Aggregate the data in JavaScript
         const aggregation = {};
 
-        // Count tickets generated per line
-        for (const ticket of createdTickets) {
+        for (const ticket of tickets) {
+            // Initialize the line if it's the first time we see it
             if (!aggregation[ticket.line]) {
                 aggregation[ticket.line] = { tickets_generated: 0, downtime: 0 };
             }
-            aggregation[ticket.line].tickets_generated += 1;
-        }
 
-        // Sum the downtime per line
-        for (const ticket of closedTickets) {
-            if (!aggregation[ticket.line]) {
-                aggregation[ticket.line] = { tickets_generated: 0, downtime: 0 };
+            // Increment the count of generated tickets
+            aggregation[ticket.line].tickets_generated += 1;
+
+            // If this ticket is also "Closed", add its downtime to the sum
+            if (ticket.status === 'Closed') {
+                aggregation[ticket.line].downtime += ticket.downtime_minutes || 0;
             }
-            aggregation[ticket.line].downtime += ticket.downtime_minutes || 0;
         }
 
         // Convert the aggregated object into the final array format
