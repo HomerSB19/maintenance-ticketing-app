@@ -29,18 +29,18 @@
         <source src="https://www.soundjay.com/buttons/beep-01a.mp3" type="audio/mpeg">
     </audio>
     <div id="error-notification"></div>
-    <div class="container mx-auto p-4 max-w-3xl">
+    <div class="container mx-auto p-4 max-w-7xl">
         <div id="auth-section" class="mb-4 flex justify-between items-center">
-    <div class="flex items-center">
-        <img src="/logo.png" alt="Klemove Logo" class="h-8 mr-4"> <h1 class="text-2xl font-bold text-gray-800">Maintenance Ticketing App</h1>
-    </div>
-
-    <div>
-        <span id="user-role" class="text-gray-700 mr-4 text-sm"></span>
-        <button id="login-btn" onclick="showLoginModal()" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Login</button>
-        <button id="logout-btn" onclick="logout()" class="hidden px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm">Logout</button>
-    </div>
-</div>
+            <div class="flex items-center">
+                <img src="/logo.png" alt="Klemove Logo" class="h-8 mr-4"> <h1 class="text-2xl font-bold text-gray-800">Maintenance Ticketing App</h1>
+            </div>
+        
+            <div>
+                <span id="user-role" class="text-gray-700 mr-4 text-sm"></span>
+                <button id="login-btn" onclick="showLoginModal()" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Login</button>
+                <button id="logout-btn" onclick="logout()" class="hidden px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm">Logout</button>
+            </div>
+        </div>
         <div id="nav-buttons" class="flex flex-wrap gap-2 mb-4">
             <button id="submit-ticket-btn" onclick="showScreen('submit-ticket')" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm hidden">Submit Ticket</button>
             <button id="dashboard-btn" onclick="showScreen('dashboard')" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm hidden">Dashboard</button>
@@ -104,18 +104,18 @@
                 </div>
                 <div id="mgh-box" class="p-4 rounded-lg shadow-md text-center cursor-pointer" onclick="loadLineTickets('MGH')">
                     <h3 class="text-lg font-bold text-gray-800">MGH</h3>
-                    <p class="p-2 text-gray-800 text-sm">Open: <span id="mgh-open">0</span></p>
-                    <p class="p-2 text-gray-800 text-sm">Ongoing: <span id="mgh-ongoing">0</span></p>
+                    <p class="text-gray-800 text-sm">Open: <span id="mgh-open">0</span></p>
+                    <p class="text-gray-800 text-sm">Ongoing: <span id="mgh-ongoing">0</span></p>
                 </div>
                 <div id="ppk-box" class="p-4 rounded-lg shadow-md text-center cursor-pointer" onclick="loadLineTickets('PPK')">
                     <h3 class="text-lg font-bold text-gray-800">PPK</h3>
-                    <p class="p-2 text-gray-800 text-sm">Open: <span id="ppk-open">0</span></p>
-                    <p class="p-2 text-gray-800 text-sm">Ongoing: <span id="ppk-ongoing">0</span></p>
+                    <p class="text-gray-800 text-sm">Open: <span id="ppk-open">0</span></p>
+                    <p class="text-gray-800 text-sm">Ongoing: <span id="ppk-ongoing">0</span></p>
                 </div>
                 <div id="iamm-box" class="p-4 rounded-lg shadow-md text-center cursor-pointer" onclick="loadLineTickets('IAMM')">
                     <h3 class="text-lg font-bold text-gray-800">IAMM</h3>
-                    <p class="p-2 text-gray-800 text-sm">Open: <span id="iamm-open">0</span></p>
-                    <p class="p-2 text-gray-800 text-sm">Ongoing: <span id="iamm-ongoing">0</span></p>
+                    <p class="text-gray-800 text-sm">Open: <span id="iamm-open">0</span></p>
+                    <p class="text-gray-800 text-sm">Ongoing: <span id="iamm-ongoing">0</span></p>
                 </div>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
@@ -671,8 +671,8 @@
                 console.log('stopAlarm: Alarm stopped, timestamp:', getMexicoCityDate());
                 // Only restart the interval if it's currently null (meaning it was cleared)
                 if (!alarmInterval) {
-                    console.log('stopAlarm: Restarting polling interval (5s), timestamp:', getMexicoCityDate());
-                    alarmInterval = setInterval(checkForAlarms, 5000);
+                    console.log('stopAlarm: Restarting polling interval (30s), timestamp:', getMexicoCityDate());
+                    alarmInterval = setInterval(checkForAlarms, 30000);
                 }
             }
 
@@ -1273,7 +1273,7 @@
                         }
                     });
 
-                    //updateTechnicianTable(); // Update technician performance table as well
+                    // updateTechnicianTable(); // Temporarily disabled
                 } catch (error) {
                     console.error('loadAnalytics: Error', error, 'timestamp:', getMexicoCityDate());
                     showErrorNotification(`Failed to load analytics: ${error.message}`);
@@ -1354,8 +1354,8 @@
                     showScreen('dashboard'); // Always show dashboard on init
                     // Start the alarm polling only once
                     if (!alarmInterval) {
-                        console.log('init: Starting polling interval (5s), timestamp:', getMexicoCityDate());
-                        alarmInterval = setInterval(checkForAlarms, 5000); // Poll every 5 seconds
+                        console.log('init: Starting polling interval (120s), timestamp:', getMexicoCityDate());
+                        alarmInterval = setInterval(checkForAlarms, 120000); // Poll every 60 seconds
                     }
                 } catch (error) {
                     console.error('init: Error', error, 'timestamp:', getMexicoCityDate());
